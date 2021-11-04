@@ -2,6 +2,7 @@ import numpy as np
 import tensorflow as tf
 import json
 from nltk.tokenize import word_tokenize
+from collections import defaultdict
 
 import constants
 
@@ -10,7 +11,7 @@ RANDOM_SEED = 2021
 
 class JsonWrapper():
 
-	def __init__(self, json_file, tokenizer):
+	def __init__(self, json_file, tokenizer, split_by_profession=False):
 
 		self.json_name = json_file
 		self.tokenizer = tokenizer
@@ -29,7 +30,12 @@ class JsonWrapper():
 		self.splits = dict()
 
 		self.read_json(json_file)
-		self.split_dataset()
+
+		if split_by_profession:
+			proportion = (0.6, 0.2, 0.2)
+			self.split_dataset(proportion=proportion, split_by_profession=split_by_profession)
+		else:
+			self.split_dataset(split_by_profession=split_by_profession)
 
 	def read_json(self, json_file):
 
@@ -53,10 +59,13 @@ class JsonWrapper():
 		input_ids = token_ids + [0] * (constants.MAX_WORDPIECES - len(wordpieces))
 		return input_ids
 
-	def split_dataset(self, proportion=(0.8, 0.1, 0.1), modes=('train', 'dev', 'test')):
+	def split_dataset(self, proportion=(0.8, 0.1, 0.1), modes=('train', 'dev', 'test'), split_by_profession=True):
 
 		all_indices = []
 		removed_indices = []
+
+		profession2indices = defaultdict(list)
+
 		for idx, sent_tokens in enumerate(self.tokens[:]):
 			sent_wordpieces = [self.tokenizer.cls_token] + self.tokenizer.tokenize((' '.join(sent_tokens))) + \
 			                  [self.tokenizer.sep_token]
@@ -81,12 +90,24 @@ class JsonWrapper():
 					removed_indices.append(idx)
 				else:
 					all_indices.append(idx)
+					profession2indices[self.ortho_forms[idx]].append(idx)
 
-		# TODO: function to do stratified splits
-		split_modes = np.split(np.array(all_indices), [int(prop * len(all_indices)) for prop in np.cumsum(proportion)])
 
-		for split, mode in zip(split_modes, modes):
-			self.splits[mode] = list(split)
+
+		if split_by_profession:
+			self.splits = defaultdict(list)
+			unique_professions = list(set(self.ortho_forms))
+			split_modes = np.split(np.array(unique_professions),
+			                       [int(prop * len(unique_professions)) for prop in np.cumsum(proportion)])
+
+			for split, mode in zip(split_modes, modes):
+				for profession in split:
+					self.splits[mode].extend(profession2indices[profession])
+		else:
+			split_modes = np.split(np.array(all_indices),
+			                       [int(prop * len(all_indices)) for prop in np.cumsum(proportion)])
+			for split, mode in zip(split_modes, modes):
+				self.splits[mode] = list(split)
 
 		self.splits["removed"] = removed_indices
 

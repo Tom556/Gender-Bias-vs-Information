@@ -66,19 +66,20 @@ class TFRecordWrapper:
 
 class TFRecordWriter(TFRecordWrapper):
     
-    def __init__(self, models, data_dir):
+    def __init__(self, models, data_dir, split_by_profession=False):
 
         super().__init__(models)
         if os.path.isfile(os.path.join(data_dir, self.data_map_fn)):
             self._from_json(data_dir)
-        
+
+        self.split_by_profession =split_by_profession
         self.model2tfrs = defaultdict(set)
         self.tfr2mode = dict()
 
         for mode in self.modes:
             for model in models:
 
-                tfr_fn = self.struct_tfrecord_fn(model, mode)
+                tfr_fn = self.struct_tfrecord_fn(model, mode, self.split_by_profession)
                 self.map_tfrecord[mode][model] = tfr_fn
 
                 self.model2tfrs[model].add(tfr_fn)
@@ -98,7 +99,7 @@ class TFRecordWriter(TFRecordWrapper):
                 mode = self.tfr2mode[tfrecord_file]
 
                 #TODO: iterate over the wrapped data
-                in_datasets = JsonWrapper(f"{data_dir}/en.json", tokenizer)
+                in_datasets = JsonWrapper(f"{data_dir}/en.json", tokenizer, split_by_profession=self.split_by_profession)
                 all_wordpieces, all_segments, all_token_len, positions, biases, informations, objects = in_datasets.training_examples(mode)
                 
                 options = tf.io.TFRecordOptions()#compression_type='GZIP')
@@ -114,8 +115,12 @@ class TFRecordWriter(TFRecordWrapper):
         self._to_json(data_dir)
     
     @staticmethod
-    def struct_tfrecord_fn(model,mode):
-        return f"{model}_gendervec_{mode}.tfrecord"
+    def struct_tfrecord_fn(model,mode, split_by_profession=False):
+        if split_by_profession:
+            fn = f"{model}_gendervec_{mode}_spb.tfrecord"
+        else:
+            fn = f"{model}_gendervec_{mode}.tfrecord"
+        return fn
     
     @staticmethod
     def get_model_tokenizer(model_path, do_lower_case, seed=42):
@@ -237,8 +242,9 @@ if __name__ == "__main__":
 
     parser.add_argument("data_dir", help="Directory with data")
     parser.add_argument("--models", nargs='*', default=['bert-base-cased'], type=str, help="List of models.")
+    parser.add_argument("--sbp", action='store_true', help="Split by profession.")
 
     args = parser.parse_args()
 
-    TFRW = TFRecordWriter(args.models, args.data_dir)
+    TFRW = TFRecordWriter(args.models, args.data_dir, split_by_profession=args.sbp)
     TFRW.compute_and_save(args.data_dir)
