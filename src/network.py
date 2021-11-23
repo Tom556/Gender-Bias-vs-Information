@@ -85,9 +85,8 @@ class Network():
             self._optimizer.learning_rate.assign(self._lr)
 
         @tf.function
-        def get_projections(self, embeddings, max_token_len, language, task):
+        def get_projections(self, embeddings, language, task):
             """ Computes projections after Orthogonal Transformation, and after Dimension Scaling"""
-            embeddings = embeddings[:, :max_token_len, :]
 
             orthogonal_projections = embeddings @ self.OrthogonalTransformations[language]
             if self._orthogonal_reg:
@@ -98,7 +97,7 @@ class Network():
             return orthogonal_projections, projections
 
         @tf.function
-        def _forward(self, embeddings, max_token_len, language, task, embeddings_gate=None):
+        def _forward(self, embeddings, language, task, embeddings_gate=None):
             """ Computes all n^2 pairs of distances after projection
             for each sentence in a batch.
 
@@ -107,7 +106,7 @@ class Network():
             """
             if self.average_layers:
                 embeddings = tf.reduce_mean(embeddings * self.LayerWeights[f'lw_{task}'], axis=1, keepdims=False)
-            _, projections = self.get_projections(embeddings, max_token_len, language, task)
+            _, projections = self.get_projections(embeddings,  language, task)
             if embeddings_gate is not None:
                 projections = projections * embeddings_gate
 
@@ -116,9 +115,22 @@ class Network():
             diffs = projections - transposed_projections  # shape [batch, batch, emb_dim]
             squared_diffs = tf.reduce_sum(tf.math.square(diffs), axis=-1) # shape [batch, batch]
             return squared_diffs
+        
+        @tf.function
+        def _compute_target_mask(self, feature_vector):
+            batch_size = tf.shape(feature_vector)[0]
+            
+            feature_vector = tf.expand_dims(feature_vector, 1) # shape [batch, 1]
+            transposed_feature_vector = tf.transpose(feature_vector) # shape [1, batch]
+    
+            target = tf.math.logical_xor(feature_vector, transposed_feature_vector)
+            target = tf.cast(target, dtype=tf.float32)
+            mask = tf.ones_like(target, dtype=tf.float32) - tf.eye(batch_size, dtype=tf.float32)
+            
+            return target, mask
 
         @tf.function
-        def _loss(self, predicted_distances, gold_distances, mask, token_lens):
+        def _loss(self, predicted_distances, gold_distances, mask):
             loss = tf.reduce_sum(tf.abs(predicted_distances - gold_distances) * mask) / \
                             tf.clip_by_value(tf.reduce_sum(mask), 1., constants.MAX_TOKENS ** 2.)
             return loss
@@ -127,27 +139,17 @@ class Network():
             # separate train function is needed to avoid variable creation on non-first call
             # see: https://github.com/tensorflow/tensorflow/issues/27120
             @tf.function(experimental_relax_shapes=True)
-            def train_on_batch(bias, information, is_object, token_len, embeddings, l1_lambda=0.0, mst_s=None):
+            def train_on_batch(bias, information, is_object, embeddings, l1_lambda=0.0):
         
                 with tf.GradientTape() as tape:
-                    max_token_len = tf.reduce_max(token_len)
-
                     if 'bias' in task:
-                        feature_vector = bias # [batch]
+                        target, mask = self._compute_target_mask(bias)
                     else:
-                        feature_vector = information
+                        target, mask = self._compute_target_mask(information)
 
-                    feature_vector = tf.expand_dims(feature_vector, 1) # shape [batch, 1]
-                    transposed_feature_vector = tf.transpose(feature_vector) # shape [1, batch]
+                    predicted_distances = self._forward(embeddings, language, task)
 
-                    target = tf.math.logical_xor(feature_vector, transposed_feature_vector)
-                    target = tf.cast(target, dtype=tf.float32)
-                    mask = tf.ones_like(target, dtype=tf.float32)
-                    mask = tf.linalg.set_diag(mask, tf.zeros(mask.shape[0:-1]))
-
-                    predicted_distances = self._forward(embeddings, max_token_len, language, task)
-
-                    loss = self._loss(predicted_distances, target, mask, token_len)
+                    loss = self._loss(predicted_distances, target, mask)
                     if self._orthogonal_reg:
                         ortho_penalty = self.ortho_reguralization(self.OrthogonalTransformations[language])
                         loss += self._orthogonal_reg * ortho_penalty
@@ -186,18 +188,19 @@ class Network():
             return train_on_batch
 
         @tf.function(experimental_relax_shapes=True)
-        def evaluate_on_batch(self, target, mask, token_len, embeddings, language, task, mst_s=None):
-            max_token_len = tf.reduce_max(token_len)
-            target = target[:, :max_token_len, :max_token_len]
-            mask = mask[:, :max_token_len, :max_token_len]
-            predicted_distances = self._forward(embeddings, max_token_len, language, task)
-            loss = self._loss(predicted_distances, target, mask, token_len)
+        def evaluate_on_batch(self, bias, information, is_object, embeddings, language, task):
+            if 'bias' in task:
+                target, mask = self._compute_target_mask(bias)
+            else:
+                target, mask = self._compute_target_mask(information)
+            
+            predicted_distances = self._forward(embeddings, language, task)
+            loss = self._loss(predicted_distances, target, mask)
             return loss
 
         @tf.function(experimental_relax_shapes=True)
-        def predict_on_batch(self, token_len, embeddings, language, task, embeddings_gate=None):
-            max_token_len = tf.reduce_max(token_len)
-            predicted_distances = self._forward(embeddings, max_token_len, language, task, embeddings_gate)
+        def predict_on_batch(self, embeddings, language, task):
+            predicted_distances = self._forward(embeddings, language, task)
             return predicted_distances
 
     def __init__(self, args):
@@ -220,9 +223,9 @@ class Network():
     @staticmethod
     def decode(serialized_example, layer_idx, model):
         features_to_decode = {"index": tf.io.FixedLenFeature([], tf.int64),
-                              'bias': tf.io.FixedLenFeature([], tf.bool),
-                              'information': tf.io.FixedLenFeature([], tf.bool),
-                              'is_object': tf.io.FixedLenFeature([], tf.bool)
+                              'bias': tf.io.FixedLenFeature([], tf.int64),
+                              'information': tf.io.FixedLenFeature([], tf.int64),
+                              'is_object': tf.io.FixedLenFeature([], tf.int64)
                               }
         if layer_idx == -1:
             features_to_decode.update({f'layer_{idx}': tf.io.FixedLenFeature([], tf.string)
@@ -238,7 +241,6 @@ class Network():
         bias = tf.cast(x["bias"], dtype=tf.bool)
         information = tf.cast(x["information"], dtype=tf.bool)
         is_object = tf.cast(x["is_object"], dtype=tf.bool)
-        num_tokens = tf.cast(x["num_tokens"], dtype=tf.int64)
         if layer_idx == -1:
             embeddings = [tf.io.parse_tensor(x[f"layer_{idx}"], out_type=tf.float32)
                           for idx in range(constants.MODEL_LAYERS[model])]
@@ -247,7 +249,7 @@ class Network():
         else:
             embeddings = tf.io.parse_tensor(x[f"layer_{layer_idx}"], out_type=tf.float32)
     
-        return index, bias, information, is_object, num_tokens, embeddings
+        return index, bias, information, is_object, embeddings
 
     @staticmethod
     def data_pipeline(tf_data, languages, tasks, args, mode='train'):
@@ -255,26 +257,19 @@ class Network():
     
         datasets_to_interleve = []
         for langs in languages:
-            for lang in langs.split('+'):
-                if lang not in tf_data:
-                    raise ValueError(f"Language: {lang} not found in the data set")
-                for task in tasks:
-                    if task not in tf_data[lang]:
-                        raise ValueError(f"Task: {task} not found in the data set")
-                
-                    data = tf_data[lang][task]
-                
-                    data = data.map(partial(Network.decode, task=task, layer_idx=args.layer_index, model=args.model),
-                                    num_parallel_calls=tf.data.experimental.AUTOTUNE)
-                    if args.layer_index >= 0:
-                        data = data.cache()
-                    if mode == 'train':
-                        data = data.shuffle(constants.SHUFFLE_SIZE, args.seed)
-                    data = data.batch(args.batch_size)
-                    data = data.map(lambda *x: (langs, task, x), num_parallel_calls=tf.data.experimental.AUTOTUNE)
-                    data = data.prefetch(tf.data.experimental.AUTOTUNE)
-                    datasets_to_interleve.append(data)
-    
+            for task in tasks:
+                data = tf_data
+                data = data.map(partial(Network.decode, layer_idx=args.layer_index, model=args.model),
+                                num_parallel_calls=tf.data.experimental.AUTOTUNE)
+                if args.layer_index >= 0:
+                    data = data.cache()
+                if mode == 'train':
+                    data = data.shuffle(constants.SHUFFLE_SIZE, args.seed)
+                data = data.batch(args.batch_size)
+                data = data.map(lambda *x: (langs, task, x), num_parallel_calls=tf.data.experimental.AUTOTUNE)
+                data = data.prefetch(tf.data.experimental.AUTOTUNE)
+                datasets_to_interleve.append(data)
+
         if len(datasets_to_interleve) == 0:
             return []
         if len(datasets_to_interleve) == 1:
@@ -299,11 +294,11 @@ class Network():
                 lang = lang.numpy().decode()
                 task = task.numpy().decode()
             
-                _, batch_bias, batch_information, batch_is_object, batch_num_tokens, batch_embeddings = batch
+                _, batch_bias, batch_information, batch_is_object, batch_embeddings = batch
 
-            batch_loss = self.probe._train_fns[lang][task](batch_bias, batch_information, batch_is_object, batch_num_tokens, batch_embeddings, l1_lambda)
-        
-            progressbar.set_description(f"Training, batch loss: {batch_loss:.4f}, memory: {resource.getrusage(resource.RUSAGE_SELF).ru_maxrss /1024 / 1024:.2f}")
+                batch_loss = self.probe._train_fns[lang][task](batch_bias, batch_information, batch_is_object, batch_embeddings, l1_lambda)
+            
+                progressbar.set_description(f"Training, batch loss: {batch_loss:.4f}, memory: {resource.getrusage(resource.RUSAGE_SELF).ru_maxrss /1024 / 1024:.2f}")
         
             eval_loss = self.evaluate(dev, 'validation', args)
             if eval_loss < self.optimal_loss - self.ES_DELTA:
@@ -330,7 +325,7 @@ class Network():
                     # Loss equation changes, so we need to reset optimal loss
                     self.optimal_loss = np.inf
         
-            with self._writer.as_default():
+            with self.probe._writer.as_default():
                 tf.summary.scalar("train/learning_rate", self.probe._optimizer.learning_rate)
 
     def evaluate(self, data, data_name, args):
@@ -340,10 +335,9 @@ class Network():
             
                 progressbar = tqdm(enumerate(data[language][task]))
                 for batch_idx, (_, _, batch) in progressbar:
-                    _, batch_target, batch_mask, batch_num_tokens, batch_embeddings = batch
-                    if "distance" in task:
-                        batch_loss = self.distance_probe.evaluate_on_batch(batch_target, batch_mask, batch_num_tokens,
-                                                                           batch_embeddings, language, task)
+                    _, batch_bias, batch_information, batch_is_object, batch_embeddings = batch
+
+                    batch_loss = self.probe.evaluate_on_batch(batch_bias, batch_information, batch_is_object, batch_embeddings,language, task)
 
                     progressbar.set_description(f"Evaluating on {language} {task} loss: {batch_loss:.4f}")
                     all_losses[lang_idx][task_idx] += batch_loss

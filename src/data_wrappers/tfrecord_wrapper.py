@@ -207,7 +207,7 @@ class TFRecordReader(TFRecordWrapper):
                              f" supported models: {self.models}")
         
         for mode in self.modes:
-            tfr_fn = os.path.join(self.data_dir, self.map_tfrecord[mode])
+            tfr_fn = os.path.join(self.data_dir, self.map_tfrecord[mode][self.model_name])
             data_set = tf.data.TFRecordDataset(tfr_fn,
                                                #compression_type='GZIP',
                                                buffer_size=constants.BUFFER_SIZE)
@@ -223,7 +223,7 @@ class TFRecordReader(TFRecordWrapper):
         
         def parse(example):
             features_dict = {"index": tf.io.FixedLenFeature([], tf.int64),
-                             'bias': tf.io.FixedLenFeature([], tf.bool),
+                             'bias': tf.io.FixedLenFeature([], tf.int64),
                              'information': tf.io.FixedLenFeature([], tf.bool),
                              'is_object': tf.io.FixedLenFeature([], tf.bool)
                              }
