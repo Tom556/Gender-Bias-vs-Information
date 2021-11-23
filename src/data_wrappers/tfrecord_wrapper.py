@@ -183,9 +183,9 @@ class TFRecordWriter(TFRecordWrapper):
     @staticmethod
     def serialize_example(idx, embeddings, bias, info, obj):
         feature = {'index': TFRecordWriter._int64_feature(idx),
-                   'bias': TFRecordWriter._float_feature(bias),
-                   'information': TFRecordWriter._float_feature(info),
-                   'is_object': TFRecordWriter._float_feature(obj)}
+                   'bias': TFRecordWriter._int64_feature(bias),
+                   'information': TFRecordWriter._int64_feature(info),
+                   'is_object': TFRecordWriter._int64_feature(obj)}
         feature.update({f'layer_{idx}': TFRecordWriter._bytes_feature(tf.io.serialize_tensor(layer_embedding))
                         for idx, layer_embedding in enumerate(embeddings)})
 
@@ -223,9 +223,9 @@ class TFRecordReader(TFRecordWrapper):
         
         def parse(example):
             features_dict = {"index": tf.io.FixedLenFeature([], tf.int64),
-                             'bias': tf.io.FixedLenFeature([], tf.float32),
-                             'information': tf.io.FixedLenFeature([], tf.float32),
-                             'is_object': tf.io.FixedLenFeature([], tf.float32)
+                             'bias': tf.io.FixedLenFeature([], tf.bool),
+                             'information': tf.io.FixedLenFeature([], tf.bool),
+                             'is_object': tf.io.FixedLenFeature([], tf.bool)
                              }
             features_dict.update({f"layer_{idx}": tf.io.FixedLenFeature([], tf.string)
                                   for idx in range(constants.MODEL_LAYERS[model_name])})

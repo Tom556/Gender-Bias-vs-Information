@@ -156,6 +156,6 @@ class JsonWrapper():
 
 		return tf.stack(bert_ids), tf.stack(segments), tf.constant(max_segment, dtype=tf.int64), \
 		       tf.constant(np.array(self.positions)[indices], dtype=tf.int64), \
-		       tf.constant(np.array(self.biases)[indices],dtype=tf.float32), \
-		       tf.constant(np.array(self.informations)[indices], dtype=tf.float32), \
-		       tf.constant(np.array(self.if_objects)[indices], dtype=tf.float32)
+		       tf.constant(np.array(self.biases)[indices],dtype=tf.bool), \
+		       tf.constant(np.array(self.informations)[indices], dtype=tf.bool), \
+		       tf.constant(np.array(self.if_objects)[indices], dtype=tf.bool)
