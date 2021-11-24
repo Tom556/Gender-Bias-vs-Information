@@ -11,7 +11,7 @@ if __name__ == "__main__":
 	parser = argparse.ArgumentParser()
 	#
 	parser.add_argument("parent_dir", type=str, default="../experiments", help="Parent experiment directory")
-	parser.add_argument("data_dir", type=str, default='../resources/tf_data',
+	parser.add_argument("data_dir", type=str, default='../data',
 	                    help="Directory where tfrecord files are stored")
 	parser.add_argument("--json-data", type=str, default=None, help="JSON with conllu and languages for training")
 
@@ -26,9 +26,9 @@ if __name__ == "__main__":
 	                                                               "If -1 all layers embeddings are averaged")
 	# Train arguments
 	parser.add_argument("--seed", default=42, type=int, help="Seed for variable initialisation")
-	parser.add_argument("--batch-size", default=12, type=int, help="Batch size")
-	parser.add_argument("--epochs", default=25, type=int, help="Maximal number of training epochs")
-	parser.add_argument("--learning-rate", default=0.001, type=float, help="Initial learning rate")
+	parser.add_argument("--batch-size", default=10, type=int, help="Batch size")
+	parser.add_argument("--epochs", default=40, type=int, help="Maximal number of training epochs")
+	parser.add_argument("--learning-rate", default=0.02, type=float, help="Initial learning rate")
 	parser.add_argument("--ortho", default=None, type=float,
 	                    help="Orthogonality reguralization (SRIP) for language map matrices.")
 	parser.add_argument("--l1", default=None, type=float, help="L1 reguralization of the weights.")

@@ -14,7 +14,7 @@ import constants
 class Network():
     
     ONPLATEU_DECAY = 0.1
-    ES_PATIENCE = 2
+    ES_PATIENCE = 4
     ES_DELTA = 1e-35
     
     PENALTY_THRESHOLD = 1.5
@@ -157,9 +157,7 @@ class Network():
                         probe_l1_penalty = tf.norm(self.BinaryProbe[task], ord=1)
                         loss += l1_lambda * probe_l1_penalty
         
-
                 variables = [self.BinaryProbe[task], self.OrthogonalTransformations[language]]
-
         
                 if self.average_layers:
                     variables.append(self.LayerWeights[f'lw_{task}'])
