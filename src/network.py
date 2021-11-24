@@ -125,7 +125,9 @@ class Network():
     
             target = tf.math.logical_xor(feature_vector, transposed_feature_vector)
             target = tf.cast(target, dtype=tf.float32)
+            # mask is upper triangular matrix
             mask = tf.ones_like(target, dtype=tf.float32) - tf.eye(batch_size, dtype=tf.float32)
+            mask = tf.linalg.band_part(mask, 0, -1)
             
             return target, mask
 
