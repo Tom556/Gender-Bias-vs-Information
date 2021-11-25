@@ -92,8 +92,6 @@ class JsonWrapper():
 					all_indices.append(idx)
 					profession2indices[self.ortho_forms[idx]].append(idx)
 
-
-
 		if split_by_profession:
 			self.splits = defaultdict(list)
 			unique_professions = list(set(self.ortho_forms))
@@ -154,7 +152,7 @@ class JsonWrapper():
 			bert_ids.append(tf.constant(self.get_bert_ids(sent_wordpieces), dtype=tf.int64))
 			max_segment.append(segment_id)
 
-		return tf.stack(bert_ids), tf.stack(segments), tf.constant(max_segment, dtype=tf.int64), \
+		return tf.stack(indices), tf.stack(bert_ids), tf.stack(segments), tf.constant(max_segment, dtype=tf.int64), \
 		       tf.constant(np.array(self.positions)[indices], dtype=tf.int64), \
 		       tf.constant(np.array(self.biases)[indices],dtype=tf.bool), \
 		       tf.constant(np.array(self.informations)[indices], dtype=tf.bool), \

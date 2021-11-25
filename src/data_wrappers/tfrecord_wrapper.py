@@ -97,17 +97,14 @@ class TFRecordWriter(TFRecordWrapper):
                     continue
                 
                 mode = self.tfr2mode[tfrecord_file]
-
-                #TODO: iterate over the wrapped data
                 in_datasets = JsonWrapper(f"{data_dir}/en.json", tokenizer, split_by_profession=self.split_by_profession)
-                all_wordpieces, all_segments, all_token_len, positions, biases, informations, objects = in_datasets.training_examples(mode)
+                indices, all_wordpieces, all_segments, all_token_len, positions, biases, informations, objects = in_datasets.training_examples(mode)
                 
                 options = tf.io.TFRecordOptions()#compression_type='GZIP')
                 with tf.io.TFRecordWriter(os.path.join(data_dir, tfrecord_file), options=options) as tf_writer:
-                    for idx, (wordpieces, segments, token_len, pos, bias, info, obj) in \
-                            tqdm(enumerate(
-                                zip(tf.unstack(all_wordpieces), tf.unstack(all_segments), tf.unstack(all_token_len),
-                                tf.unstack(positions), tf.unstack(biases), tf.unstack(informations), tf.unstack(objects))),
+                    for (idx, wordpieces, segments, token_len, pos, bias, info, obj) in \
+                            tqdm(zip(indices, tf.unstack(all_wordpieces), tf.unstack(all_segments), tf.unstack(all_token_len),
+                                tf.unstack(positions), tf.unstack(biases), tf.unstack(informations), tf.unstack(objects)),
                                 desc="Embedding computation"):
                         embeddings = self.calc_embeddings(model, wordpieces, segments, token_len, pos)
                         train_example = self.serialize_example(idx, embeddings, bias, info, obj)
