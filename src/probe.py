@@ -19,6 +19,9 @@ if __name__ == "__main__":
 	                    help="Languages to probe.")
 	parser.add_argument("--tasks", nargs='*', type=str,
 	                    help="Probing tasks (gender information or bias)")
+	parser.add_argument("--objects-only", action="store_true",
+	                    help="Whether to only consider the embeddings of professions that are objects of a sentence"
+	                         "(hence, they are closer to preposition with gender information)")
 
 	# Probe arguments
 	parser.add_argument("--probe-rank", default=None, type=int, help="Rank of the probe")

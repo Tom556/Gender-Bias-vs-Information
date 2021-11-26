@@ -261,6 +261,8 @@ class Network():
                 data = tf_data
                 data = data.map(partial(Network.decode, layer_idx=args.layer_index, model=args.model),
                                 num_parallel_calls=tf.data.experimental.AUTOTUNE)
+                if args.objects_only:
+                    data = data.filter(lambda x: x["is_object"])
                 if args.layer_index >= 0:
                     data = data.cache()
                 if mode == 'train':

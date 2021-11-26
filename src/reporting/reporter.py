@@ -44,7 +44,7 @@ class Accuracy(Metric):
         self.all_correct = 0
         self.all_predicted = 0
     
-    def update_state(self, gold, predicted, mask):
+    def update_state(self, predicted, gold, mask):
         self.all_predicted += np.sum(mask)
         correct = (gold == (predicted >= self.threshold))
         self.all_correct += np.sum(correct[mask.astype(bool)])
@@ -92,6 +92,8 @@ class AccuracyReporter(Reporter):
         for lang in self._languages:
             for task in self._tasks:
                 prefix = '{}.{}.{}.'.format(self.dataset_name, lang, task)
+                if args.objects_only:
+                    prefix += "objects_only."
 
                 with open(os.path.join(args.out_dir, prefix + 'accuracy'), 'w') as accuracy_f:
                     accuracy_f.write(f'{self.accuracy_d[lang][task].result()}\n')
@@ -101,4 +103,4 @@ class AccuracyReporter(Reporter):
             for task in self._tasks:
                 self.accuracy_d[lang][task] = Accuracy(self.threshold)
                 for pred_values, gold_values, mask in self.predict(args, lang, task):
-                    self.accuracy_d[lang][task](gold_values, pred_values, mask)
+                    self.accuracy_d[lang][task](pred_values, gold_values, mask)
