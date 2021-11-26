@@ -2,23 +2,21 @@
 MAX_TOKENS = 128
 MAX_WORDPIECES = 128
 
-# Conllu indices
-CONLLU_ID = 0
-CONLLU_ORTH = 1
-CONLLU_LEMMA = 2
-CONLLU_POS = 3
-CONLLU_FEATS = 5
-CONLLU_HEAD = 6
-CONLLU_LABEL = 7
+# WinoMT data
+profession_splits = {"train": {"librarian", "driver", "sheriff", "carpenter", "developer", "assistant", "teacher",
+                               "janitor", "cook", "editor", "mechanic", "construction worker", "clerk", "counselor",
+                               "auditor", "farmer", "housekeeper", "attendant", "accountant", "laborer", "supervisor",
+                               "receptionist", "analyst", "secretary"},
+                     "dev": {"physician", "CEO", "baker", "tailor", "cashier", "lawyer", "hairdresser", "chief"},
+                     "test": {"designer", "manager", "guard", "cleaner", "mover", "nurse", "writer", "salesperson"}}
 
-CONLL_POS = 4
-CONLL_COREF = 16
-CONLL_NODE = 17
+male_biased = {"driver", "supervisor", "janitor", "cook", "mover", "laborer", "construction worker", "chief",
+               "developer", "carpenter", "manager", "lawyer", "farmer", "salesperson", "physician", "guard",
+               "analyst", "mechanic", "sheriff", "CEO"}
 
-
-             
-lang2iso = {'en': 'eng', 'es': 'spa', 'fi': 'fin', 'pl': 'pol', 'ar': 'arb',
-        'id': 'ind', 'zh': 'cmn', 'fr': 'fra', 'sl': 'slv', 'eu': 'eus'}
+female_biased = {"attendant", "cashier", "teacher", "nurse", "assistant", "secretary", "auditor", "cleaner",
+                 "receptionist", "clerk", "counselor", "designer", "hairdresser", "writer", "housekeeper",
+                 "baker", "accountant", "editor", "librarian", "tailor"}
 
 # BERT model parameters
 LANGUAGE_CHINESE = "chinese"
