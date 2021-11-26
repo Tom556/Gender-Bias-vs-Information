@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+import random
 import json
 from nltk.tokenize import word_tokenize
 from collections import defaultdict
@@ -101,11 +102,13 @@ class JsonWrapper():
 			for split, mode in zip(split_modes, modes):
 				for profession in split:
 					self.splits[mode].extend(profession2indices[profession])
+				random.shuffle(self.splits[mode])
 		else:
 			split_modes = np.split(np.array(all_indices),
 			                       [int(prop * len(all_indices)) for prop in np.cumsum(proportion)])
 			for split, mode in zip(split_modes, modes):
 				self.splits[mode] = list(split)
+				random.shuffle(self.splits[mode])
 
 		self.splits["removed"] = removed_indices
 
