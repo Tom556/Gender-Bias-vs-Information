@@ -179,6 +179,8 @@ class Network():
 
                     if self._orthogonal_reg:
                         tf.summary.scalar("train/{}_nonorthogonality_penalty".format(language), ortho_penalty)
+                        tf.summary.scalar("train/{}_nonzero_dimensions".format(task),
+                                          tf.math.reduce_sum(tf.cast(self.BinaryProbe[task] > 1e-4, dtype=tf.int64)))
                     if self._l1_reg:
                         tf.summary.scalar("train/probe_l1_penalty", probe_l1_penalty)
                         tf.summary.scalar("train/l1_lambda", l1_lambda)
@@ -235,7 +237,7 @@ class Network():
     
         x = tf.io.parse_example(
             serialized_example,
-            features= features_to_decode)
+            features=features_to_decode)
     
         index = tf.cast(x["index"], dtype=tf.int64)
         bias = tf.cast(x["bias"], dtype=tf.bool)
@@ -253,7 +255,6 @@ class Network():
 
     @staticmethod
     def data_pipeline(tf_data, languages, tasks, args, mode='train'):
-        # TODO: Read correctly gender data
     
         datasets_to_interleve = []
         for langs in languages:
