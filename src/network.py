@@ -47,7 +47,7 @@ class Network():
 
 
             self.LayerWeights = {f'lw_{task}':
-                                     tf.Variable(tf.initializers.Ones()((1,constants.MODEL_LAYERS[args.model],1,1)),
+                                     tf.Variable(tf.initializers.Ones()((1,constants.MODEL_LAYERS[args.model],1)),
                                                  trainable=self.average_layers, name='{}_layer_weights'.format(task))
                                  for task in args.tasks}
 
@@ -263,7 +263,7 @@ class Network():
                 data = data.map(partial(Network.decode, layer_idx=args.layer_index, model=args.model),
                                 num_parallel_calls=tf.data.experimental.AUTOTUNE)
                 if args.objects_only:
-                    data = data.filter(lambda x: x["is_object"])
+                    data = data.filter(lambda index, bias, information, is_object, embeddings: is_object)
                 if args.layer_index >= 0:
                     data = data.cache()
                 if mode == 'train':
