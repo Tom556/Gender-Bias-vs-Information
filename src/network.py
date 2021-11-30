@@ -45,9 +45,8 @@ class Network():
             else:
                 raise NotImplementedError
 
-
             self.LayerWeights = {f'lw_{task}':
-                                     tf.Variable(tf.initializers.Ones()((1,constants.MODEL_LAYERS[args.model],1)),
+                                     tf.Variable(tf.initializers.Zeros()((1,constants.MODEL_LAYERS[args.model],1)),
                                                  trainable=self.average_layers, name='{}_layer_weights'.format(task))
                                  for task in args.tasks}
 
@@ -104,8 +103,13 @@ class Network():
             Note that due to padding, some distances will be non-zero for pads.
             Computes (B(h_i-h_j))^T(B(h_i-h_j)) for all i,j
             """
+            
             if self.average_layers:
-                embeddings = tf.reduce_mean(embeddings * self.LayerWeights[f'lw_{task}'], axis=1, keepdims=False)
+                # compute softmax average of embeddings in all layers
+                exp_layer_weights = tf.math.exp(self.LayerWeights[f'lw_{task}'])
+                embeddings = tf.reduce_sum(embeddings * exp_layer_weights, axis=1, keepdims=False) /\
+                             tf.reduce_sum(exp_layer_weights, keepdims=False)
+            
             _, projections = self.get_projections(embeddings,  language, task)
             if embeddings_gate is not None:
                 projections = projections * embeddings_gate
