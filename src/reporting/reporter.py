@@ -54,8 +54,6 @@ class Accuracy(Metric):
             return 0.
         return self.all_correct / self.all_predicted
     
-    
-
 
 class Reporter():
     

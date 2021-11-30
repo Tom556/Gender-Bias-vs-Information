@@ -22,6 +22,8 @@ if __name__ == "__main__":
 	parser.add_argument("--objects-only", action="store_true",
 	                    help="Whether to only consider the embeddings of professions that are objects of a sentence"
 	                         "(hence, they are closer to preposition with gender information)")
+	parser.add_argument("--repeat", default=1, type=int,
+	                    help="How many times iterate trough trianing examples in one epoch")
 
 	# Probe arguments
 	parser.add_argument("--probe-rank", default=None, type=int, help="Rank of the probe")

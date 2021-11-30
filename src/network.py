@@ -271,6 +271,7 @@ class Network():
                 if args.layer_index >= 0:
                     data = data.cache()
                 if mode == 'train':
+                    data = data.repeat(args.repeat)
                     data = data.shuffle(constants.SHUFFLE_SIZE, args.seed)
                 data = data.batch(args.batch_size)
                 data = data.map(lambda *x: (langs, task, x), num_parallel_calls=tf.data.experimental.AUTOTUNE)
