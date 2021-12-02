@@ -14,7 +14,7 @@ from transformers import XLMRobertaTokenizer, TFXLMRobertaModel
 central_storage_strategy = tf.distribute.experimental.CentralStorageStrategy()
 
 sys.path.append(r"/Users/tomasz/PycharmProjects/bias_vs_information/src")
-from data_wrappers.json_wrapper import JsonWrapper
+from data_wrappers.wino_wrapper import WinoWrapper
 import constants
 
 def merge_dict(d1, d2):
@@ -97,17 +97,19 @@ class TFRecordWriter(TFRecordWrapper):
                     continue
                 
                 mode = self.tfr2mode[tfrecord_file]
-                in_datasets = JsonWrapper(f"{data_dir}/en.json", tokenizer, split_by_profession=self.split_by_profession)
-                indices, all_wordpieces, all_segments, all_token_len, positions, biases, informations, objects = in_datasets.training_examples(mode)
+                in_datasets = WinoWrapper(f"{data_dir}/en.txt", tokenizer, split_by_profession=self.split_by_profession)
+                indices, all_wordpieces, all_segments, all_token_len, positions,\
+                m_biases, f_biases, m_informations, f_informations, objects = in_datasets.training_examples(mode)
                 
                 options = tf.io.TFRecordOptions()#compression_type='GZIP')
                 with tf.io.TFRecordWriter(os.path.join(data_dir, tfrecord_file), options=options) as tf_writer:
-                    for (idx, wordpieces, segments, token_len, pos, bias, info, obj) in \
+                    for (idx, wordpieces, segments, token_len, pos, m_bias, f_bias, m_info, f_info, obj) in \
                             tqdm(zip(indices, tf.unstack(all_wordpieces), tf.unstack(all_segments), tf.unstack(all_token_len),
-                                tf.unstack(positions), tf.unstack(biases), tf.unstack(informations), tf.unstack(objects)),
+                                tf.unstack(positions), tf.unstack(m_biases), tf.unstack(f_biases),
+                                tf.unstack(m_informations), tf.unstack(f_informations), tf.unstack(objects)),
                                 desc="Embedding computation"):
                         embeddings = self.calc_embeddings(model, wordpieces, segments, token_len, pos)
-                        train_example = self.serialize_example(idx, embeddings, bias, info, obj)
+                        train_example = self.serialize_example(idx, embeddings, m_bias, f_bias, m_info, f_info, obj)
                         tf_writer.write(train_example.SerializeToString())
         self._to_json(data_dir)
     
@@ -178,10 +180,12 @@ class TFRecordWriter(TFRecordWrapper):
         return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
     
     @staticmethod
-    def serialize_example(idx, embeddings, bias, info, obj):
+    def serialize_example(idx, embeddings, m_bias, f_bias, m_info, f_info, obj):
         feature = {'index': TFRecordWriter._int64_feature(idx),
-                   'bias': TFRecordWriter._int64_feature(bias),
-                   'information': TFRecordWriter._int64_feature(info),
+                   'm_bias': TFRecordWriter._int64_feature(m_bias),
+                   'f_bias': TFRecordWriter._int64_feature(f_bias),
+                   'm_information': TFRecordWriter._int64_feature(m_info),
+                   'f_information': TFRecordWriter._int64_feature(f_info),
                    'is_object': TFRecordWriter._int64_feature(obj)}
         feature.update({f'layer_{idx}': TFRecordWriter._bytes_feature(tf.io.serialize_tensor(layer_embedding))
                         for idx, layer_embedding in enumerate(embeddings)})
@@ -220,8 +224,10 @@ class TFRecordReader(TFRecordWrapper):
         
         def parse(example):
             features_dict = {"index": tf.io.FixedLenFeature([], tf.int64),
-                             'bias': tf.io.FixedLenFeature([], tf.int64),
-                             'information': tf.io.FixedLenFeature([], tf.bool),
+                             'm_bias': tf.io.FixedLenFeature([], tf.bool),
+                             'f_bias': tf.io.FixedLenFeature([], tf.bool),
+                             'm_information': tf.io.FixedLenFeature([], tf.bool),
+                             'f_information': tf.io.FixedLenFeature([], tf.bool),
                              'is_object': tf.io.FixedLenFeature([], tf.bool)
                              }
             features_dict.update({f"layer_{idx}": tf.io.FixedLenFeature([], tf.string)

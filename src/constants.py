@@ -6,9 +6,20 @@ MAX_WORDPIECES = 128
 profession_splits = {"train": {"librarian", "driver", "sheriff", "carpenter", "developer", "assistant", "teacher",
                                "janitor", "cook", "editor", "mechanic", "construction worker", "clerk", "counselor",
                                "auditor", "farmer", "housekeeper", "attendant", "accountant", "laborer", "supervisor",
-                               "receptionist", "analyst", "secretary"},
-                     "dev": {"physician", "CEO", "baker", "tailor", "cashier", "lawyer", "hairdresser", "chief"},
-                     "test": {"designer", "manager", "guard", "cleaner", "mover", "nurse", "writer", "salesperson"}}
+                               "receptionist", "analyst", "secretary",
+                               'protester', 'onlooker', 'client', 'patient', 'undergraduate', 'homeowner', 'practitioner',
+                               'someone', 'victim', 'child', 'broker', 'administrator', 'dispatcher', 'educator', 'chemist',
+                               'instructor', 'guest', 'technician', 'specialist', 'pathologist', 'passenger',
+                               'surgeon', 'programmer', 'witness', 'student', 'doctor', 'electrician', 'advisee',
+                               'employee', 'resident', 'paralegal', 'examiner', 'engineer', 'pedestrian', 'psychologist',
+                               'teenager', 'hygienist', 'visitor'},
+                               
+                     "dev": {"physician", "CEO", "baker", "tailor", "cashier", "lawyer", "hairdresser", "chief",
+                             'customer', 'investigator', 'appraiser', 'owner', 'pharmacist', 'bartender', 'nutritionist',
+                             'chef', 'plumber', 'buyer', 'firefighter', 'dietitian', 'officer'},
+                     "test": {"designer", "manager", "guard", "cleaner", "mover", "nurse", "writer", "salesperson",
+                              'planner', 'machinist', 'advisor', 'painter', 'taxpayer', 'bystander', 'paramedic',
+                              'inspector', 'veterinarian', 'scientist', 'therapist', 'architect', 'worker'}}
 
 male_biased = {"driver", "supervisor", "janitor", "cook", "mover", "laborer", "construction worker", "chief",
                "developer", "carpenter", "manager", "lawyer", "farmer", "salesperson", "physician", "guard",
@@ -17,6 +28,18 @@ male_biased = {"driver", "supervisor", "janitor", "cook", "mover", "laborer", "c
 female_biased = {"attendant", "cashier", "teacher", "nurse", "assistant", "secretary", "auditor", "cleaner",
                  "receptionist", "clerk", "counselor", "designer", "hairdresser", "writer", "housekeeper",
                  "baker", "accountant", "editor", "librarian", "tailor"}
+
+non_biased = {'protester', 'onlooker', 'client', 'patient', 'undergraduate', 'homeowner', 'practitioner', 'someone',
+               'victim', 'child', 'broker', 'administrator', 'dispatcher', 'educator', 'chemist', 'instructor', 'guest',
+               'technician', 'specialist', 'pathologist', 'passenger', 'surgeon', 'programmer', 'witness', 'student',
+               'doctor', 'electrician', 'advisee', 'employee', 'resident', 'paralegal', 'examiner', 'engineer',
+               'pedestrian', 'psychologist', 'teenager', 'hygienist', 'visitor', 'customer', 'investigator', 'appraiser',
+               'owner', 'pharmacist', 'bartender', 'nutritionist', 'chef', 'plumber', 'buyer', 'firefighter', 'dietitian',
+               'officer', 'planner', 'machinist', 'advisor', 'painter', 'taxpayer', 'bystander', 'paramedic', 'inspector',
+               'veterinarian', 'scientist', 'therapist', 'architect', 'worker'}
+
+problematic_list = {'doctor', 'programmer', ' engineer', 'scientist', 'electrician', 'plumber', 'firefighter',
+                    'machinist', 'technician', 'specialist', 'surgeon', 'hygienist', 'officer'}
 
 # BERT model parameters
 LANGUAGE_CHINESE = "chinese"
