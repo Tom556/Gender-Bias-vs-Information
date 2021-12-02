@@ -114,31 +114,23 @@ class Network():
             if embeddings_gate is not None:
                 projections = projections * embeddings_gate
 
-            projections = tf.expand_dims(projections, 1)  # shape [batch, 1, emb_dim]
-            transposed_projections = tf.transpose(projections, perm=(1, 0, 2))  # shape [1, batch, emb_dim]
-            diffs = projections - transposed_projections  # shape [batch, batch, emb_dim]
-            squared_diffs = tf.reduce_sum(tf.math.square(diffs), axis=-1) # shape [batch, batch]
-            return squared_diffs
+            squared_norms = tf.norm(projections, ord='euclidean', axis=1, keepdims=True) ** 2.
+            return squared_norms
         
         @tf.function
         def _compute_target_mask(self, feature_vector):
             batch_size = tf.shape(feature_vector)[0]
             
-            feature_vector = tf.expand_dims(feature_vector, 1) # shape [batch, 1]
-            transposed_feature_vector = tf.transpose(feature_vector) # shape [1, batch]
-    
-            target = tf.math.logical_xor(feature_vector, transposed_feature_vector)
-            target = tf.cast(target, dtype=tf.float32)
-            # mask is upper triangular matrix
-            mask = tf.ones_like(target, dtype=tf.float32) - tf.eye(batch_size, dtype=tf.float32)
-            mask = tf.linalg.band_part(mask, 0, -1)
+            target = tf.expand_dims(feature_vector, 1)
+            # target = (tf.cast(target, dtype=tf.float32) * 2. ) - 1.
+            mask = tf.ones_like(target, dtype=tf.float32)
             
             return target, mask
 
         @tf.function
-        def _loss(self, predicted_distances, gold_distances, mask):
-            loss = tf.reduce_sum(tf.abs(predicted_distances - gold_distances) * mask) / \
-                            tf.clip_by_value(tf.reduce_sum(mask), 1., constants.MAX_TOKENS ** 2.)
+        def _loss(self, predicted_depths, gold_depths, mask):
+            loss = tf.reduce_sum(tf.abs(predicted_depths - gold_depths) * mask) / \
+                   tf.clip_by_value(tf.reduce_sum(mask), 1., constants.MAX_TOKENS)
             return loss
 
         def train_factory(self, language, task):
@@ -153,9 +145,9 @@ class Network():
                     else:
                         target, mask = self._compute_target_mask(information)
 
-                    predicted_distances = self._forward(embeddings, language, task)
+                    predicted_depths = self._forward(embeddings, language, task)
 
-                    loss = self._loss(predicted_distances, target, mask)
+                    loss = self._loss(predicted_depths, target, mask)
                     if self._orthogonal_reg:
                         ortho_penalty = self.ortho_reguralization(self.OrthogonalTransformations[language])
                         loss += self._orthogonal_reg * ortho_penalty
@@ -200,14 +192,14 @@ class Network():
             else:
                 target, mask = self._compute_target_mask(information)
             
-            predicted_distances = self._forward(embeddings, language, task)
-            loss = self._loss(predicted_distances, target, mask)
+            predicted_depths = self._forward(embeddings, language, task)
+            loss = self._loss(predicted_depths, target, mask)
             return loss
 
         @tf.function(experimental_relax_shapes=True)
         def predict_on_batch(self, embeddings, language, task):
-            predicted_distances = self._forward(embeddings, language, task)
-            return predicted_distances
+            predicted_depths = self._forward(embeddings, language, task)
+            return predicted_depths
 
     def __init__(self, args):
 
@@ -362,6 +354,3 @@ class Network():
 
     def load(self, args):
         self.checkpoint_manager.restore_or_initialize()
-
-    
-
