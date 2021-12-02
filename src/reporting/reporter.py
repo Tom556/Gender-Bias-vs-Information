@@ -34,6 +34,12 @@ class Accuracy(Metric):
     def __init__(self, threshold=0.5):
         self.all_correct = 0
         self.all_predicted = 0
+
+        self.male_correct= 0
+        self.female_correct = 0
+    
+        self.all_male = 0
+        self.all_female = 0
         self.threshold = threshold
         super().__init__()
 
@@ -43,16 +49,32 @@ class Accuracy(Metric):
     def reset_state(self):
         self.all_correct = 0
         self.all_predicted = 0
+        
+        self.male_correct= 0
+        self.female_correct = 0
+        
+        self.all_male = 0
+        self.all_female = 0
     
     def update_state(self, predicted, gold, mask):
         self.all_predicted += np.sum(mask)
         correct = (gold == (predicted >= self.threshold))
         self.all_correct += np.sum(correct[mask.astype(bool)])
+        
+        self.male_correct += np.sum(correct[~gold.astype(bool) & mask.astype(bool)])
+        self.female_correct += np.sum(correct[gold.astype(bool) & mask.astype(bool)])
+        
+        self.all_male += np.sum(mask[~gold.astype(bool)])
+        self.all_female += np.sum(mask[gold.astype(bool)])
 
     def result(self):
+        
+        male_recall = self.male_correct / self.all_male
+        female_recall = self.female_correct / self.all_female
+        f1 = 2. * (male_recall * female_recall) / (male_recall + female_recall)
         if not self.all_predicted:
             return 0.
-        return self.all_correct / self.all_predicted
+        return self.all_correct / self.all_predicted, male_recall, female_recall, f1
     
 
 class Reporter():
@@ -93,8 +115,12 @@ class AccuracyReporter(Reporter):
                 if args.objects_only:
                     prefix += "objects_only."
 
-                with open(os.path.join(args.out_dir, prefix + 'accuracy'), 'w') as accuracy_f:
-                    accuracy_f.write(f'{self.accuracy_d[lang][task].result()}\n')
+                with open(os.path.join(args.out_dir, prefix + 'results'), 'w') as accuracy_f:
+                    acc, m_acc, f_acc, f1 = self.accuracy_d[lang][task].result()
+                    accuracy_f.write(f'acc: {acc}\n'
+                                     f'm_acc: {m_acc}\n'
+                                     f'f_acc: {f_acc}\n'
+                                     f'f1: {f1}\n')
 
     def compute(self, args):
         for lang in self._languages:
