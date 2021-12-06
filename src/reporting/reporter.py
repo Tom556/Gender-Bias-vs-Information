@@ -32,15 +32,15 @@ class Metric:
     
 class Accuracy(Metric):
     def __init__(self, threshold=0.5):
-        self.all_correct = 0
-        self.all_predicted = 0
-
-        self.male_correct= 0
-        self.female_correct = 0
-    
-        self.all_male = 0
-        self.all_female = 0
         self.threshold = threshold
+        
+        self.all_correct = 0
+        self.prediction_count = 0
+    
+        self.tp = 0
+        self.all_pos = 0
+        self.all_pred = 0
+        
         super().__init__()
 
     def __call__(self,gold, predicted, mask):
@@ -48,33 +48,31 @@ class Accuracy(Metric):
     
     def reset_state(self):
         self.all_correct = 0
-        self.all_predicted = 0
+        self.prediction_count = 0
         
-        self.male_correct= 0
-        self.female_correct = 0
+        self.tp = 0
         
-        self.all_male = 0
-        self.all_female = 0
+        self.all_pos = 0
+        self.all_pred = 0
     
     def update_state(self, predicted, gold, mask):
-        self.all_predicted += np.sum(mask)
-        correct = (gold == (predicted >= self.threshold))
-        self.all_correct += np.sum(correct[mask.astype(bool)])
+        self.prediction_count += np.sum(mask)
+        correct = (gold.astype(bool) == (predicted >= self.threshold))
+        self.all_correct += np.sum(correct & mask.astype(bool))
         
-        self.male_correct += np.sum(correct[~gold.astype(bool) & mask.astype(bool)])
-        self.female_correct += np.sum(correct[gold.astype(bool) & mask.astype(bool)])
+        self.tp += np.sum(correct & gold.astype(bool) & mask.astype(bool))
         
-        self.all_male += np.sum(mask[~gold.astype(bool)])
-        self.all_female += np.sum(mask[gold.astype(bool)])
+        self.all_pos += np.sum(mask.astype(bool) & gold.astype(bool))
+        self.all_pred += np.sum((predicted >= self.threshold) & mask.astype(bool))
 
     def result(self):
         
-        male_recall = self.male_correct / self.all_male
-        female_recall = self.female_correct / self.all_female
-        f1 = 2. * (male_recall * female_recall) / (male_recall + female_recall)
-        if not self.all_predicted:
-            return 0.
-        return self.all_correct / self.all_predicted, male_recall, female_recall, f1
+        recall = self.tp / self.all_pos
+        precision = self.tp / self.all_pred
+        f1 = 2. * (recall * precision) / (recall + precision)
+        if not self.prediction_count:
+            return 0., 0., 0., 0.
+        return self.all_correct / self.prediction_count, recall, precision, f1
     
 
 class Reporter():
@@ -88,12 +86,21 @@ class Reporter():
         data_pipe = Network.data_pipeline(self.dataset, [lang], [task], args, mode=self.dataset_name)
         progressbar = tqdm(enumerate(data_pipe), desc="Predicting, {}, {}".format(lang, task))
         for batch_idx, (_, _, batch) in progressbar:
-            _, batch_bias, batch_information, batch_is_object, batch_embeddings = batch
+            _, batch_m_bias, batch_f_bias, batch_m_information, batch_f_information, batch_is_object, batch_embeddings = batch
             predicted = self.network.probe.predict_on_batch(batch_embeddings, lang, task)
-            if 'bias' in task:
-                gold, mask = self.network.probe._compute_target_mask(batch_bias)
+
+            if task == 'm_bias':
+                feature_vector = batch_m_bias
+            elif task == 'f_bias':
+                feature_vector = batch_f_bias
+            elif task == 'm_information':
+                feature_vector = batch_m_information
+            elif task == 'f_information':
+                feature_vector = batch_f_information
             else:
-                gold, mask = self.network.probe._compute_target_mask(batch_information)
+                raise ValueError(f"Unrecognized task: {task}")
+            
+            gold, mask = self.network.probe._compute_target_mask(feature_vector)
 
             yield predicted, gold, mask
             
@@ -118,8 +125,8 @@ class AccuracyReporter(Reporter):
                 with open(os.path.join(args.out_dir, prefix + 'results'), 'w') as accuracy_f:
                     acc, m_acc, f_acc, f1 = self.accuracy_d[lang][task].result()
                     accuracy_f.write(f'acc: {acc}\n'
-                                     f'm_acc: {m_acc}\n'
-                                     f'f_acc: {f_acc}\n'
+                                     f'recall: {m_acc}\n'
+                                     f'precision: {f_acc}\n'
                                      f'f1: {f1}\n')
 
     def compute(self, args):
