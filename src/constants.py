@@ -1,6 +1,7 @@
 # Wordpieces | Tokens limits
 MAX_TOKENS = 128
 MAX_WORDPIECES = 128
+MAX_BATCH = 500
 
 # WinoMT data
 profession_splits = {"train": {"librarian", "driver", "sheriff", "carpenter", "developer", "assistant", "teacher",
@@ -23,23 +24,28 @@ profession_splits = {"train": {"librarian", "driver", "sheriff", "carpenter", "d
 
 male_biased = {"driver", "supervisor", "janitor", "cook", "mover", "laborer", "construction worker", "chief",
                "developer", "carpenter", "manager", "lawyer", "farmer", "salesperson", "physician", "guard",
-               "analyst", "mechanic", "sheriff", "CEO"}
+               "analyst", "mechanic", "sheriff", "CEO",
+               "doctor", "programmer", "surgeon",' engineer', 'scientist', 'electrician', 'plumber', 'firefighter',
+               'machinist', 'technician', 'officer'}
 
 female_biased = {"attendant", "cashier", "teacher", "nurse", "assistant", "secretary", "auditor", "cleaner",
                  "receptionist", "clerk", "counselor", "designer", "hairdresser", "writer", "housekeeper",
-                 "baker", "accountant", "editor", "librarian", "tailor"}
+                 "baker", "accountant", "editor", "librarian", "tailor",
+                 'hygienist'}
 
 non_biased = {'protester', 'onlooker', 'client', 'patient', 'undergraduate', 'homeowner', 'practitioner', 'someone',
                'victim', 'child', 'broker', 'administrator', 'dispatcher', 'educator', 'chemist', 'instructor', 'guest',
-               'technician', 'specialist', 'pathologist', 'passenger', 'surgeon', 'programmer', 'witness', 'student',
-               'doctor', 'electrician', 'advisee', 'employee', 'resident', 'paralegal', 'examiner', 'engineer',
-               'pedestrian', 'psychologist', 'teenager', 'hygienist', 'visitor', 'customer', 'investigator', 'appraiser',
-               'owner', 'pharmacist', 'bartender', 'nutritionist', 'chef', 'plumber', 'buyer', 'firefighter', 'dietitian',
-               'officer', 'planner', 'machinist', 'advisor', 'painter', 'taxpayer', 'bystander', 'paramedic', 'inspector',
-               'veterinarian', 'scientist', 'therapist', 'architect', 'worker'}
+               'specialist', 'pathologist', 'passenger', 'witness', 'student',
+                'advisee', 'employee', 'resident', 'paralegal', 'examiner',
+               'pedestrian', 'psychologist', 'teenager', 'visitor', 'customer', 'investigator', 'appraiser',
+               'owner', 'pharmacist', 'bartender', 'nutritionist', 'chef', 'buyer', 'dietitian',
+               'planner', 'advisor', 'painter', 'taxpayer', 'bystander', 'paramedic', 'inspector',
+               'veterinarian', 'therapist', 'architect', 'worker' }
+                #"doctor", "programmer", "surgeon",' engineer', 'scientist', 'electrician', 'plumber', 'firefighter',
+                # 'machinist', 'technician', 'officer', 'hygenist' }
 
-problematic_list = {'doctor', 'programmer', ' engineer', 'scientist', 'electrician', 'plumber', 'firefighter',
-                    'machinist', 'technician', 'specialist', 'surgeon', 'hygienist', 'officer'}
+problematic_list = {} #{'doctor', 'programmer', ' engineer', 'scientist', 'electrician', 'plumber', 'firefighter',
+                    #'machinist', 'technician', 'specialist', 'surgeon', 'hygienist', 'officer'}
 
 # BERT model parameters
 LANGUAGE_CHINESE = "chinese"
