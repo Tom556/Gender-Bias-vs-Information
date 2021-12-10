@@ -47,6 +47,10 @@ non_biased = {'protester', 'onlooker', 'client', 'patient', 'undergraduate', 'ho
 problematic_list = {} #{'doctor', 'programmer', ' engineer', 'scientist', 'electrician', 'plumber', 'firefighter',
                     #'machinist', 'technician', 'specialist', 'surgeon', 'hygienist', 'officer'}
 
+male_pronouns = {"he","him","his"}
+female_pronouns = {"she", "her"}
+neutral_pronouns = {"they", "them", "their"}
+
 # BERT model parameters
 LANGUAGE_CHINESE = "chinese"
 LANGUAGE_MULTILINGUAL = "multilingual"

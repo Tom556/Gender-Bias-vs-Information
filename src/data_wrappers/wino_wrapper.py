@@ -23,7 +23,9 @@ class WinoWrapper():
 
 		self.ortho_forms = []
 
-		self.positions = []
+		self.prof_positions = []
+		self.pronoun_positions = []
+		self.pronoun_counters = []
 
 		self.m_biases = []
 		self.f_biases = []
@@ -50,14 +52,33 @@ class WinoWrapper():
 				
 				# 0 means male, 1 means famele
 				gender = split_line[0]
-				position = int(split_line[1])
-				object = (position > 1)
+				prof_position = int(split_line[1])
+				object = (prof_position > 1)
 				tokens = word_tokenize(split_line[2])
+				pronoun_position = []
+				pronoun_counter = 0
+				
 				ortho = split_line[3]
+				
+				for tidx, tok in enumerate(tokens):
+					if tok in constants.male_pronouns:
+						if gender == 'male':
+							pronoun_position.append(tidx)
+					elif tok in constants.female_pronouns:
+						if gender == 'female':
+							pronoun_position.append(tidx)
+					elif tok in constants.neutral_pronouns:
+						if gender == 'neutral':
+							pronoun_position.append(tidx)
+					else:
+						continue
+					pronoun_counter += 1
 				
 				self.tokens.append(tokens)
 				self.ortho_forms.append(ortho)
-				self.positions.append(position)
+				self.prof_positions.append(prof_position)
+				self.pronoun_positions.append(pronoun_position)
+				self.pronoun_counters.append(pronoun_counter)
 				self.if_objects.append(object)
 				
 				if gender == 'male':
@@ -113,6 +134,10 @@ class WinoWrapper():
 			elif self.ortho_forms[idx] in constants.problematic_list:
 				print(f"Sentence {idx} problematic word: {self.ortho_forms[idx]}, in file {self.wino_name}, skipping.")
 				removed_indices.append(idx)
+				
+			elif self.pronoun_counters[idx] != 1:
+				print(f"Sentence {idx} : {' '.join(self.tokens[idx])} number of pronouns does not equal to 1.")
+				removed_indices.append(idx)
 			else:
 				wordpiece_pointer = 1
 
@@ -142,6 +167,7 @@ class WinoWrapper():
 					self.splits[mode].extend(profession2indices[profession])
 				random.shuffle(self.splits[mode])
 		else:
+			random.shuffle(all_indices)					
 			split_modes = np.split(np.array(all_indices),
 			                       [int(prop * len(all_indices)) for prop in np.cumsum(proportion)])
 			for split, mode in zip(split_modes, modes):
@@ -151,20 +177,6 @@ class WinoWrapper():
 		self.splits["removed"] = removed_indices
 
 	def training_examples(self, mode):
-		'''
-		Joins wordpices of tokens, so that they correspond to the tokens in conllu file.
-		:param shuffle: whether to shuffle tokens in each sentence
-
-		:return:
-			2-D tensor  [num valid sentences, max num wordpieces] bert wordpiece ids,
-			2-D tensor [num valid sentences, max num wordpieces] wordpiece to word segment mappings
-			1-D tensor [num valid sentences] number of words in each sentence
-			1-D tensor [num valid sentences] positions of the profession word
-			1-D tensor [num valid sentences] biases boolean if female biased
-			1-D tensor [num valid sentences] informations boolean if factual female gender
-			1-D tensor [num valid sentences] objects boolean if profession is in object
-		'''
-
 		if mode not in self.splits:
 			raise ValueError(f"Unkown split of dataset: {mode}, possible modes: {self.splits.keys()}")
 		indices = self.splits[mode]
@@ -192,9 +204,12 @@ class WinoWrapper():
 			segments.append(tf.constant(sent_segments, dtype=tf.int64))
 			bert_ids.append(tf.constant(self.get_bert_ids(sent_wordpieces), dtype=tf.int64))
 			max_segment.append(segment_id)
+			
+		first_pronoun_positions = [pronoun_position[0] for pronoun_position in self.pronoun_positions]
 
 		return tf.stack(indices), tf.stack(bert_ids), tf.stack(segments), tf.constant(max_segment, dtype=tf.int64), \
-		       tf.constant(np.array(self.positions)[indices], dtype=tf.int64), \
+		       tf.constant(np.array(self.prof_positions)[indices], dtype=tf.int64), \
+			   tf.constant(np.array(first_pronoun_positions)[indices], dtype=tf.int64), \
 		       tf.constant(np.array(self.m_biases)[indices],dtype=tf.bool), \
 			   tf.constant(np.array(self.f_biases)[indices], dtype=tf.bool), \
 		       tf.constant(np.array(self.m_informations)[indices], dtype=tf.bool), \

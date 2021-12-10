@@ -98,14 +98,14 @@ class TFRecordWriter(TFRecordWrapper):
                 
                 mode = self.tfr2mode[tfrecord_file]
                 in_datasets = WinoWrapper(f"{data_dir}/en.txt", tokenizer, split_by_profession=self.split_by_profession)
-                indices, all_wordpieces, all_segments, all_token_len, positions,\
+                indices, all_wordpieces, all_segments, all_token_len, prof_positions, pronoun_positions,\
                 m_biases, f_biases, m_informations, f_informations, objects = in_datasets.training_examples(mode)
                 
                 options = tf.io.TFRecordOptions()#compression_type='GZIP')
                 with tf.io.TFRecordWriter(os.path.join(data_dir, tfrecord_file), options=options) as tf_writer:
                     for (idx, wordpieces, segments, token_len, pos, m_bias, f_bias, m_info, f_info, obj) in \
                             tqdm(zip(indices, tf.unstack(all_wordpieces), tf.unstack(all_segments), tf.unstack(all_token_len),
-                                tf.unstack(positions), tf.unstack(m_biases), tf.unstack(f_biases),
+                                tf.unstack(prof_positions), tf.unstack(pronoun_positions), tf.unstack(m_biases), tf.unstack(f_biases),
                                 tf.unstack(m_informations), tf.unstack(f_informations), tf.unstack(objects)),
                                 desc="Embedding computation"):
                         embeddings = self.calc_embeddings(model, wordpieces, segments, token_len, pos)
