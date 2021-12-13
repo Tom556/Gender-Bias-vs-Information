@@ -105,11 +105,11 @@ class WinoWrapper():
 					self.m_biases.append(False)
 					self.f_biases.append(False)
 
-	def get_bert_ids(self, wordpieces):
+	def get_model_ids(self, wordpieces):
 		"""Token ids from Tokenizer vocab"""
 		token_ids = self.tokenizer.convert_tokens_to_ids(wordpieces)
 		input_ids = token_ids + [0] * (constants.MAX_WORDPIECES - len(wordpieces))
-		return input_ids
+		return np.array(input_ids)
 
 	def split_dataset(self, proportion=(0.8, 0.1, 0.1), modes=('train', 'dev', 'test'), split_by_profession=True):
 
@@ -176,6 +176,8 @@ class WinoWrapper():
 
 		self.splits["removed"] = removed_indices
 
+
+	#TODO: change return to structured output
 	def training_examples(self, mode):
 		if mode not in self.splits:
 			raise ValueError(f"Unkown split of dataset: {mode}, possible modes: {self.splits.keys()}")
@@ -187,31 +189,68 @@ class WinoWrapper():
 		segments = []
 		max_segment = []
 		bert_ids = []
+		
+		masked_wordpieces = []
 		for idx in indices:
 			sent_tokens = self.tokens[idx]
 			sent_wordpieces = self.wordpieces[idx]
+			
+			prof_pos = self.prof_positions[idx]
+			pronoun_pos = self.pronoun_positions[idx]
 
-			sent_segments = np.zeros((constants.MAX_WORDPIECES,), dtype=np.int64) - 1
-			segment_id = 0
-			wordpiece_pointer = 1
+			sent_segments = np.zeros((4, constants.MAX_WORDPIECES,), dtype=np.int64) - 1
+			sent_bert_ids = np.zeros((4, constants.MAX_WORDPIECES,), dtype=np.int64)
+			sent_max_segment = np.zeros((4,), dtype=np.int64)
+			sent_masked_wordpieces = [[], [], [], []]
+			
+			# sent variants:
+			# 0 : original sentence
+			# 1 : professions and pronouns masked
+			# 2 : only professions masked
+			# 3 : only pronouns masked
+			for sent_variant in range(4):
+				segment_id = 0
+				wordpiece_pointer = 1
+				sent_wordpieces_modified = [self.tokenizer.cls_token]
 
-			for token in sent_tokens:
-				worpieces_per_token = len(self.tokenizer.tokenize(token))
-				sent_segments[wordpiece_pointer:wordpiece_pointer + worpieces_per_token] = segment_id
-				wordpiece_pointer += worpieces_per_token
-				segment_id += 1
+				for tidx, token in enumerate(sent_tokens):
+					if tidx == prof_pos and sent_variant in (1, 2):
+						token = self.tokenizer.mask_token
+						sent_masked_wordpieces[sent_variant].append(wordpiece_pointer)
+					elif tidx in pronoun_pos and sent_variant in (1,3):
+						token = self.tokenizer.mask_token
+						sent_masked_wordpieces[sent_variant].append(wordpiece_pointer)
+					wordpieces = self.tokenizer.tokenize(token)
+					worpieces_per_token = len(wordpieces)
+					
+					sent_wordpieces_modified.extend(wordpieces)
+					sent_segments[sent_variant, wordpiece_pointer:wordpiece_pointer + worpieces_per_token] = segment_id
+					
+					wordpiece_pointer += worpieces_per_token
+					
+					segment_id += 1
+				
+				sent_wordpieces_modified.append(self.tokenizer.sep_token)
+				if sent_variant == 0:
+					assert sent_wordpieces_modified == sent_wordpieces, f"expected: {sent_wordpieces}, obtained: {sent_wordpieces_modified}"
+				
+				sent_bert_ids[sent_variant,:] = self.get_model_ids(sent_wordpieces_modified)
+				sent_max_segment[sent_variant] = segment_id
 
 			segments.append(tf.constant(sent_segments, dtype=tf.int64))
-			bert_ids.append(tf.constant(self.get_bert_ids(sent_wordpieces), dtype=tf.int64))
-			max_segment.append(segment_id)
+			bert_ids.append(tf.constant(sent_bert_ids, dtype=tf.int64))
+			max_segment.append(tf.constant(sent_max_segment, dtype=tf.int64))
 			
+			masked_wordpieces.append(sent_masked_wordpieces)
+		
 		first_pronoun_positions = [pronoun_position[0] for pronoun_position in self.pronoun_positions]
 
-		return tf.stack(indices), tf.stack(bert_ids), tf.stack(segments), tf.constant(max_segment, dtype=tf.int64), \
+		return tf.stack(indices), tf.stack(bert_ids), tf.stack(segments), tf.stack(max_segment), \
 		       tf.constant(np.array(self.prof_positions)[indices], dtype=tf.int64), \
 			   tf.constant(np.array(first_pronoun_positions)[indices], dtype=tf.int64), \
 		       tf.constant(np.array(self.m_biases)[indices],dtype=tf.bool), \
 			   tf.constant(np.array(self.f_biases)[indices], dtype=tf.bool), \
 		       tf.constant(np.array(self.m_informations)[indices], dtype=tf.bool), \
 			   tf.constant(np.array(self.f_informations)[indices], dtype=tf.bool), \
-		       tf.constant(np.array(self.if_objects)[indices], dtype=tf.bool)
+		       tf.constant(np.array(self.if_objects)[indices], dtype=tf.bool), \
+			   masked_wordpieces

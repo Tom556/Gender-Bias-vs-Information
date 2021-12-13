@@ -99,17 +99,25 @@ class TFRecordWriter(TFRecordWrapper):
                 mode = self.tfr2mode[tfrecord_file]
                 in_datasets = WinoWrapper(f"{data_dir}/en.txt", tokenizer, split_by_profession=self.split_by_profession)
                 indices, all_wordpieces, all_segments, all_token_len, prof_positions, pronoun_positions,\
-                m_biases, f_biases, m_informations, f_informations, objects = in_datasets.training_examples(mode)
+                m_biases, f_biases, m_informations, f_informations, objects, _ = in_datasets.training_examples(mode)
                 
                 options = tf.io.TFRecordOptions()#compression_type='GZIP')
                 with tf.io.TFRecordWriter(os.path.join(data_dir, tfrecord_file), options=options) as tf_writer:
-                    for (idx, wordpieces, segments, token_len, pos, m_bias, f_bias, m_info, f_info, obj) in \
+                    for (idx, wordpieces, segments, token_len, prof_pos, pron_pos, m_bias, f_bias, m_info, f_info, obj) in \
                             tqdm(zip(indices, tf.unstack(all_wordpieces), tf.unstack(all_segments), tf.unstack(all_token_len),
                                 tf.unstack(prof_positions), tf.unstack(pronoun_positions), tf.unstack(m_biases), tf.unstack(f_biases),
                                 tf.unstack(m_informations), tf.unstack(f_informations), tf.unstack(objects)),
                                 desc="Embedding computation"):
-                        embeddings = self.calc_embeddings(model, wordpieces, segments, token_len, pos)
-                        train_example = self.serialize_example(idx, embeddings, m_bias, f_bias, m_info, f_info, obj)
+                        # Computing embedding (difference between original and featured embedding)
+                        emb_prof_base = self.calc_embeddings(model, wordpieces[1], segments[1], token_len[1], prof_pos)
+                        emb_pron_base = self.calc_embeddings(model, wordpieces[1], segments[1], token_len[1], pron_pos)
+                        emb_prof_feat = self.calc_embeddings(model, wordpieces[2], segments[2], token_len[2], prof_pos)
+                        emb_pron_feat = self.calc_embeddings(model, wordpieces[3], segments[3], token_len[3], pron_pos)
+                        
+                        emb_prof_diff = [emb_f - emb_b for emb_f, emb_b in zip(emb_prof_feat, emb_prof_base)]
+                        emb_pron_diff = [emb_f - emb_b for emb_f, emb_b in zip(emb_pron_feat, emb_pron_base)]
+                        
+                        train_example = self.serialize_example(idx, emb_prof_diff, emb_pron_diff, m_bias, f_bias, m_info, f_info, obj)
                         tf_writer.write(train_example.SerializeToString())
         self._to_json(data_dir)
     
@@ -143,11 +151,11 @@ class TFRecordWriter(TFRecordWrapper):
         return model, tokenizer
     
     @staticmethod
-    def calc_embeddings(model, wordpieces, segments, token_len, position):
+    def calc_embeddings(model, wordpieces, segments, max_token_len, position):
         wordpieces = tf.expand_dims(wordpieces, 0)
         segments = tf.expand_dims(segments, 0)
-        max_token_len = tf.constant(token_len, shape=(1,), dtype=tf.int64)
-        
+        max_token_len = tf.constant(max_token_len, shape=(1,), dtype=tf.int64)
+
         model_output = model(wordpieces, attention_mask=tf.sign(wordpieces), training=False)
         embeddings = model_output.hidden_states[1:]
         
@@ -158,7 +166,7 @@ class TFRecordWriter(TFRecordWrapper):
                                 (emb, segments, max_token_len), dtype=tf.float32) for emb in embeddings]
 
         # picking the embedding of the profession name
-        embeddings = [emb[0,position,:] for emb in embeddings]
+        embeddings_prof_mask = [emb[0,position,:] for emb in embeddings]
         return embeddings
     
     @staticmethod
@@ -180,15 +188,17 @@ class TFRecordWriter(TFRecordWrapper):
         return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
     
     @staticmethod
-    def serialize_example(idx, embeddings, m_bias, f_bias, m_info, f_info, obj):
+    def serialize_example(idx, embeddings_prof, embeddings_pron, m_bias, f_bias, m_info, f_info, obj):
         feature = {'index': TFRecordWriter._int64_feature(idx),
                    'm_bias': TFRecordWriter._int64_feature(m_bias),
                    'f_bias': TFRecordWriter._int64_feature(f_bias),
                    'm_information': TFRecordWriter._int64_feature(m_info),
                    'f_information': TFRecordWriter._int64_feature(f_info),
                    'is_object': TFRecordWriter._int64_feature(obj)}
-        feature.update({f'layer_{idx}': TFRecordWriter._bytes_feature(tf.io.serialize_tensor(layer_embedding))
-                        for idx, layer_embedding in enumerate(embeddings)})
+        feature.update({f'layer_{idx}_profession': TFRecordWriter._bytes_feature(tf.io.serialize_tensor(layer_embedding))
+                        for idx, layer_embedding in enumerate(embeddings_prof)})
+        feature.update({f'layer_{idx}_pronoun': TFRecordWriter._bytes_feature(tf.io.serialize_tensor(layer_embedding))
+                        for idx, layer_embedding in enumerate(embeddings_pron)})
 
         return tf.train.Example(features=tf.train.Features(feature=feature))
 
@@ -230,7 +240,10 @@ class TFRecordReader(TFRecordWrapper):
                              'f_information': tf.io.FixedLenFeature([], tf.bool),
                              'is_object': tf.io.FixedLenFeature([], tf.bool)
                              }
-            features_dict.update({f"layer_{idx}": tf.io.FixedLenFeature([], tf.string)
+            features_dict.update({f"layer_{idx}_profession": tf.io.FixedLenFeature([], tf.string)
+                                  for idx in range(constants.MODEL_LAYERS[model_name])})
+
+            features_dict.update({f"layer_{idx}_pronoun": tf.io.FixedLenFeature([], tf.string)
                                   for idx in range(constants.MODEL_LAYERS[model_name])})
 
             example = tf.io.parse_single_example(example, features_dict)
