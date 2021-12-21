@@ -76,14 +76,24 @@ class TFRecordWriter(TFRecordWrapper):
         self.model2tfrs = defaultdict(set)
         self.tfr2mode = dict()
 
-        for mode in self.modes:
-            for model in models:
+        self.model2empirical_bias = dict()
 
+        for model in models:
+            for mode in self.modes:
+            
                 tfr_fn = self.struct_tfrecord_fn(model, mode, self.split_by_profession)
                 self.map_tfrecord[mode][model] = tfr_fn
 
                 self.model2tfrs[model].add(tfr_fn)
                 self.tfr2mode[tfr_fn] = mode
+        
+            if os.path.isfile(os.path.join(data_dir,f"eb_{model}.json")):
+                with open(os.path.join(data_dir,f"eb_{model}.json"),'r') as eb_json:
+                    empirical_bias = json.load(eb_json)
+                    empirical_bias = {k : float(v) for k, v in empirical_bias.items()}
+                    self.model2empirical_bias[model] = empirical_bias
+            else:
+                raise ValueError(f"JSON with empirical bias for model {model} doesn't exist")
 
     def compute_and_save(self, data_dir):
         
@@ -117,7 +127,11 @@ class TFRecordWriter(TFRecordWrapper):
                         emb_prof_diff = [emb_f - emb_b for emb_f, emb_b in zip(emb_prof_feat, emb_prof_base)]
                         emb_pron_diff = [emb_f - emb_b for emb_f, emb_b in zip(emb_pron_feat, emb_pron_base)]
                         
-                        train_example = self.serialize_example(idx, emb_prof_diff, emb_pron_diff, m_bias, f_bias, m_info, f_info, obj)
+                        emp_bias = self.model2empirical_bias[model_path][in_datasets.ortho_forms[idx]]
+                        
+                        train_example = self.serialize_example(idx, emb_prof_diff, emb_pron_diff,
+                                                               m_bias, f_bias, m_info, f_info,
+                                                               emp_bias, obj)
                         tf_writer.write(train_example.SerializeToString())
         self._to_json(data_dir)
     
@@ -166,8 +180,8 @@ class TFRecordWriter(TFRecordWrapper):
                                 (emb, segments, max_token_len), dtype=tf.float32) for emb in embeddings]
 
         # picking the embedding of the profession name
-        embeddings_prof_mask = [emb[0,position,:] for emb in embeddings]
-        return embeddings
+        mask_embeddings = [emb[0,position,:] for emb in embeddings]
+        return mask_embeddings
     
     @staticmethod
     def _int64_feature(value):
@@ -188,12 +202,13 @@ class TFRecordWriter(TFRecordWrapper):
         return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
     
     @staticmethod
-    def serialize_example(idx, embeddings_prof, embeddings_pron, m_bias, f_bias, m_info, f_info, obj):
+    def serialize_example(idx, embeddings_prof, embeddings_pron, m_bias, f_bias, m_info, f_info, emp_bias, obj):
         feature = {'index': TFRecordWriter._int64_feature(idx),
                    'm_bias': TFRecordWriter._int64_feature(m_bias),
                    'f_bias': TFRecordWriter._int64_feature(f_bias),
                    'm_information': TFRecordWriter._int64_feature(m_info),
                    'f_information': TFRecordWriter._int64_feature(f_info),
+                   'emp_bias': TFRecordWriter._float_feature(emp_bias),
                    'is_object': TFRecordWriter._int64_feature(obj)}
         feature.update({f'layer_{idx}_profession': TFRecordWriter._bytes_feature(tf.io.serialize_tensor(layer_embedding))
                         for idx, layer_embedding in enumerate(embeddings_prof)})
@@ -238,6 +253,7 @@ class TFRecordReader(TFRecordWrapper):
                              'f_bias': tf.io.FixedLenFeature([], tf.bool),
                              'm_information': tf.io.FixedLenFeature([], tf.bool),
                              'f_information': tf.io.FixedLenFeature([], tf.bool),
+                             'emp_bias': tf.io.FixedLenFeature([], tf.float32),
                              'is_object': tf.io.FixedLenFeature([], tf.bool)
                              }
             features_dict.update({f"layer_{idx}_profession": tf.io.FixedLenFeature([], tf.string)

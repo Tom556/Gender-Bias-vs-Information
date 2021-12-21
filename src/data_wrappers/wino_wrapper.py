@@ -25,6 +25,7 @@ class WinoWrapper():
 
 		self.prof_positions = []
 		self.pronoun_positions = []
+		self.pronoun_ortho_forms = []
 		self.pronoun_counters = []
 
 		self.m_biases = []
@@ -56,6 +57,7 @@ class WinoWrapper():
 				object = (prof_position > 1)
 				tokens = word_tokenize(split_line[2])
 				pronoun_position = []
+				pronoun_ortho_form = []
 				pronoun_counter = 0
 				
 				ortho = split_line[3]
@@ -64,12 +66,15 @@ class WinoWrapper():
 					if tok in constants.male_pronouns:
 						if gender == 'male':
 							pronoun_position.append(tidx)
+							pronoun_ortho_form.append(tok)
 					elif tok in constants.female_pronouns:
 						if gender == 'female':
 							pronoun_position.append(tidx)
+							pronoun_ortho_form.append(tok)
 					elif tok in constants.neutral_pronouns:
 						if gender == 'neutral':
 							pronoun_position.append(tidx)
+							pronoun_ortho_form.append(tok)
 					else:
 						continue
 					pronoun_counter += 1
@@ -78,6 +83,7 @@ class WinoWrapper():
 				self.ortho_forms.append(ortho)
 				self.prof_positions.append(prof_position)
 				self.pronoun_positions.append(pronoun_position)
+				self.pronoun_ortho_forms.append(pronoun_ortho_form)
 				self.pronoun_counters.append(pronoun_counter)
 				self.if_objects.append(object)
 				
@@ -217,6 +223,8 @@ class WinoWrapper():
 					if tidx == prof_pos and sent_variant in (1, 2):
 						token = self.tokenizer.mask_token
 						sent_masked_wordpieces[sent_variant].append(wordpiece_pointer)
+					elif token == "worker" and sent_variant in (1, 2) and tidx > 0 and sent_tokens[tidx-1] == "construction":
+						continue
 					elif tidx in pronoun_pos and sent_variant in (1,3):
 						token = self.tokenizer.mask_token
 						sent_masked_wordpieces[sent_variant].append(wordpiece_pointer)

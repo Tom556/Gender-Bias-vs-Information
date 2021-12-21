@@ -24,14 +24,14 @@ profession_splits = {"train": {"librarian", "driver", "sheriff", "carpenter", "d
 
 male_biased = {"driver", "supervisor", "janitor", "cook", "mover", "laborer", "construction worker", "chief",
                "developer", "carpenter", "manager", "lawyer", "farmer", "salesperson", "physician", "guard",
-               "analyst", "mechanic", "sheriff", "CEO",
-               "doctor", "programmer", "surgeon",' engineer', 'scientist', 'electrician', 'plumber', 'firefighter',
-               'machinist', 'technician', 'officer'}
+               "analyst", "mechanic", "sheriff", "CEO"} # ,
+               # "doctor", "programmer", "surgeon",' engineer', 'scientist', 'electrician', 'plumber', 'firefighter',
+               # 'machinist', 'technician', 'officer'}
 
 female_biased = {"attendant", "cashier", "teacher", "nurse", "assistant", "secretary", "auditor", "cleaner",
                  "receptionist", "clerk", "counselor", "designer", "hairdresser", "writer", "housekeeper",
-                 "baker", "accountant", "editor", "librarian", "tailor",
-                 'hygienist'}
+                 "baker", "accountant", "editor", "librarian", "tailor"} #,
+                 #'hygienist'}
 
 non_biased = {'protester', 'onlooker', 'client', 'patient', 'undergraduate', 'homeowner', 'practitioner', 'someone',
                'victim', 'child', 'broker', 'administrator', 'dispatcher', 'educator', 'chemist', 'instructor', 'guest',
@@ -40,16 +40,16 @@ non_biased = {'protester', 'onlooker', 'client', 'patient', 'undergraduate', 'ho
                'pedestrian', 'psychologist', 'teenager', 'visitor', 'customer', 'investigator', 'appraiser',
                'owner', 'pharmacist', 'bartender', 'nutritionist', 'chef', 'buyer', 'dietitian',
                'planner', 'advisor', 'painter', 'taxpayer', 'bystander', 'paramedic', 'inspector',
-               'veterinarian', 'therapist', 'architect', 'worker' }
-                #"doctor", "programmer", "surgeon",' engineer', 'scientist', 'electrician', 'plumber', 'firefighter',
-                # 'machinist', 'technician', 'officer', 'hygenist' }
+               'veterinarian', 'therapist', 'architect', 'worker',
+                "doctor", "programmer", "surgeon",'engineer', 'scientist', 'electrician', 'plumber', 'firefighter',
+                'machinist', 'technician', 'officer', 'hygienist' }
 
 problematic_list = {} #{'doctor', 'programmer', ' engineer', 'scientist', 'electrician', 'plumber', 'firefighter',
                     #'machinist', 'technician', 'specialist', 'surgeon', 'hygienist', 'officer'}
 
-male_pronouns = {"he","him","his"}
-female_pronouns = {"she", "her"}
-neutral_pronouns = {"they", "them", "their"}
+male_pronouns = {"he","him","his","He","Him","His"}
+female_pronouns = {"she", "her","She", "Her"}
+neutral_pronouns = {"they", "them", "their","They", "Them", "Their"}
 
 # BERT model parameters
 LANGUAGE_CHINESE = "chinese"
