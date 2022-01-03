@@ -22,6 +22,21 @@ profession_splits = {"train": {"librarian", "driver", "sheriff", "carpenter", "d
                               'planner', 'machinist', 'advisor', 'painter', 'taxpayer', 'bystander', 'paramedic',
                               'inspector', 'veterinarian', 'scientist', 'therapist', 'architect', 'worker'}}
 
+profession_splits = {"train": {'nurse', 'secretary', 'cook', 'client', 'someone', 'dispatcher', 'educator', 
+    'psychologist', 'nutritionist', 'pedestrian', 'broker', 'physician', 'developer', 'baker','planner', 
+    'auditor', 'appraiser', 'paralegal', 'mover', 'driver', 'farmer', 'salesperson', 'librarian', 'cashier', 
+    'cleaner', 'clerk', 'worker', 'counselor', 'student', 'veterinarian', 'undergraduate', 'investigator', 
+    'programmer', 'accountant', 'hygienist', 'lawyer', 'chef', 'chief', 'pharmacist', 'protester', 'carpenter',
+    'firefighter', 'hairdresser', 'child', 'attendant', 'owner', 'employee', 'guest', 'supervisor', 'witness',
+    'administrator', 'examiner', 'surgeon', 'specialist', 'bystander', 'engineer', 'inspector', 'architect',
+    'onlooker', 'pathologist', 'sheriff', 'guard'},
+                     "dev": {'housekeeper', 'assistant', 'victim', 'passenger', 'teacher', 'designer', 'advisee', 
+                         'practitioner', 'instructor', 'technician', 'writer', 'manager', 'paramedic', 'bartender', 
+                         'tailor', 'scientist', 'CEO', 'doctor', 'janitor', 'machinist', 'laborer'},
+                      "test": {'receptionist', 'customer', 'therapist', 'dietitian', 'patient', 'editor', 'teenager',
+                          'homeowner', 'advisor', 'buyer', 'visitor', 'resident', 'chemist', 'officer', 'analyst',
+                          'painter', 'mechanic', 'construction worker', 'electrician', 'taxpayer', 'plumber'}}
+
 male_biased = {"driver", "supervisor", "janitor", "cook", "mover", "laborer", "construction worker", "chief",
                "developer", "carpenter", "manager", "lawyer", "farmer", "salesperson", "physician", "guard",
                "analyst", "mechanic", "sheriff", "CEO"} # ,
@@ -44,8 +59,15 @@ non_biased = {'protester', 'onlooker', 'client', 'patient', 'undergraduate', 'ho
                 "doctor", "programmer", "surgeon",'engineer', 'scientist', 'electrician', 'plumber', 'firefighter',
                 'machinist', 'technician', 'officer', 'hygienist' }
 
-problematic_list = {} #{'doctor', 'programmer', ' engineer', 'scientist', 'electrician', 'plumber', 'firefighter',
-                    #'machinist', 'technician', 'specialist', 'surgeon', 'hygienist', 'officer'}
+male_gendered = {'wizard', 'actor', 'prince', 'priest', 'chairman', 'king', 'manservant', 'councilman','policeman', 'businessman', 'waiter', 'spokesman', 'steward'}
+
+female_gendered = {'witch', 'actress', 'princess', 'nun', 'chairwoman', 'queen', 'maid', 'councilwoman', 'policewoman', 'busimesswoman', 'waitress', 'spokeswoman', 'stewardess'}
+
+non_professional = {'child', 'teenager', 'onlooker', 'victim', 'protester', 'taxpayer', 'homeowner', 'owner',
+                            'employee', 'visitor', 'guest', 'bystander', 'client', 'witness', 'buyer',
+                                                'pedestrian', 'someone', 'resident', 'customer', 'passenger', 'patient' }
+
+problematic_list = {}
 
 male_pronouns = {"he","him","his","He","Him","His"}
 female_pronouns = {"she", "her","She", "Her"}

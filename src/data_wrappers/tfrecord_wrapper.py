@@ -87,8 +87,8 @@ class TFRecordWriter(TFRecordWrapper):
                 self.model2tfrs[model].add(tfr_fn)
                 self.tfr2mode[tfr_fn] = mode
         
-            if os.path.isfile(os.path.join(data_dir,f"eb_{model}.json")):
-                with open(os.path.join(data_dir,f"eb_{model}.json"),'r') as eb_json:
+            if os.path.isfile(os.path.join(data_dir, "prompts", f"empirical_bias_{model}.json")):
+                with open(os.path.join(data_dir,"prompts",f"empirical_bias_{model}.json"),'r') as eb_json:
                     empirical_bias = json.load(eb_json)
                     empirical_bias = {k : float(v) for k, v in empirical_bias.items()}
                     self.model2empirical_bias[model] = empirical_bias

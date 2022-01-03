@@ -37,7 +37,7 @@ class Network():
                                                    trainable=True, name='{}_map'.format(lang))
                                  for lang in self.languages}
             
-            self.Intercept = {task: tf.Variable(tf.initializers.Zeros()((1, 1))) for task in self.tasks}
+            self.Intercept = {lang: tf.Variable(tf.initializers.Zeros()((1, self.probe_rank))) for lang in self.languages}
 
             if self._orthogonal_reg:
                 # if orthogonalization is used multilingual probe is only diagonal scaling
@@ -91,7 +91,7 @@ class Network():
             """ Computes projections after Orthogonal Transformation, and after Dimension Scaling"""
 
             orthogonal_projections = embeddings @ self.OrthogonalTransformations[language]
-            #orthogonal_projections -= self.Intercept[language]
+            # orthogonal_projections -= self.Intercept[language]
             if self._orthogonal_reg:
                 projections = orthogonal_projections * self.BinaryProbe[task]
             else:
@@ -100,7 +100,7 @@ class Network():
             return orthogonal_projections, projections
 
         @tf.function
-        def _forward(self, embeddings, language, task, embeddings_gate=None, aggregation='sum'):
+        def _forward(self, embeddings, language, task, embeddings_gate=None, aggregation='signed-norm'):
             """ Computes all n^2 pairs of distances after projection
             for each sentence in a batch.
 
@@ -119,25 +119,30 @@ class Network():
                 projections = projections * embeddings_gate
 
             if aggregation == 'sum':
+                raise NotImplemented
+                
                 aggregated = tf.reduce_sum(projections, axis=1, keepdims=True)
                 aggregated = tf.math.sigmoid(aggregated + self.Intercept[task])
             elif aggregation == 'max':
                 aggregated = tf.reduce_sum(projections, axis=1, keepdims=True)
             elif aggregation == 'norm':
                 aggregated = tf.norm(projections, ord='euclidean', axis=1, keepdims=True) ** 2.
-            elif aggregation == 'dual-norm':
+            elif aggregation == 'signed-norm':
                 pos_projections = tf.math.maximum(0., projections)
                 neg_projections = tf.math.minimum(0., projections)
-                aggregated = tf.norm(pos_projections, ord='euclidean', axis=1, keepdims=True) ** 2. - \
-                             tf.norm(neg_projections, ord='euclidean', axis=1, keepdims=True) ** 2.
-                
+                #abs_projections = tf.math.abs(projections)
+
+                pos_norm = tf.norm(pos_projections, ord='euclidean', axis=1, keepdims=True) ** 2.
+                neg_norm = tf.norm(neg_projections, ord='euclidean', axis=1, keepdims=True) ** 2.
+                norm = tf.norm(projections, ord='euclidean', axis=1, keepdims=True) ** 2.
+
             else:
                 raise ValueError("Unknown aggregation function.")
             
             # add sigomid loss
             # aggregated = tf.math.sigmoid(aggregated + self.Intercept[task])
             
-            return aggregated
+            return pos_norm, neg_norm, norm
         
         @tf.function
         def _compute_target_mask(self, feature_vector):
@@ -147,10 +152,36 @@ class Network():
             target = tf.cast(target, dtype=tf.float32)
             mask = tf.ones_like(target, dtype=tf.float32)
             
-            return target, mask
+            #mask_pos = tf.cast(target >= 0., dtype = tf.float32)
+            #mask_neg = tf.cast(target <= 0., dtype = tf.float32)
+            return tf.math.maximum(target, 0.), - tf.math.minimum(target, 0.), tf.math.abs(target), mask 
 
         @tf.function
         def _loss(self, predicted_depths, gold_depths, mask):
+            loss = tf.reduce_sum(tf.abs(predicted_depths - gold_depths)**2. * mask) / \
+                   tf.clip_by_value(tf.reduce_sum(mask), 1., constants.MAX_BATCH)
+            return loss
+
+        @tf.function
+        def _double_loss(self, predicted_pos, predicted_neg, predicted_abs, gold_pos, gold_neg, gold_abs,  mask):
+            #predicted_pos = tf.clip_by_value(predicted_pos, 0., 1.)
+            #predicted_neg = tf.clip_by_value(predicted_neg, 0., 1.)
+            #predicted_abs = tf.clip_by_value(predicted_abs, 0., 1.)
+            loss = tf.reduce_sum(tf.abs(predicted_pos - gold_pos) * mask) / \
+                   tf.clip_by_value(tf.reduce_sum(mask), 1., constants.MAX_BATCH)
+            
+            loss += tf.reduce_sum(tf.abs(predicted_neg - gold_neg) * mask) / \
+                    tf.clip_by_value(tf.reduce_sum(mask), 1., constants.MAX_BATCH)
+
+            # loss += tf.reduce_sum((predicted_abs - gold_abs)**2. * mask) / \
+            #        tf.clip_by_value(tf.reduce_sum(mask), 1., constants.MAX_BATCH)
+            return loss
+
+        @tf.function
+        def _clipped_loss(self, predicted_depths, gold_depths, mask):
+    
+            predicted_depths = tf.clip_by_value(predicted_depths, -1., 1.)
+    
             loss = tf.reduce_sum(tf.abs(predicted_depths - gold_depths) * mask) / \
                    tf.clip_by_value(tf.reduce_sum(mask), 1., constants.MAX_BATCH)
             return loss
@@ -180,14 +211,16 @@ class Network():
             # separate train function is needed to avoid variable creation on non-first call
             # see: https://github.com/tensorflow/tensorflow/issues/27120
             @tf.function(experimental_relax_shapes=True)
-            def train_on_batch(feature_vector, embeddings, l1_lambda=0.0):
+            def train_on_batch(feature_vectors, embeddings, l1_lambda=0.0):
         
                 with tf.GradientTape() as tape:
-                    target, mask = self._compute_target_mask(feature_vector)
+                    target_pos, target_neg, target_abs, mask = self._compute_target_mask(feature_vectors)
 
-                    predicted_depths = self._forward(embeddings, language, task)
+                    predicted_pos, predicted_neg, predicted_abs = self._forward(embeddings, language, task)
                     # tf.print(predicted_depths)
-                    loss = self._logistic_loss(predicted_depths, target, mask)
+                    loss = self._double_loss(predicted_pos, predicted_neg, predicted_abs, target_pos, target_neg, target_abs, mask)
+  
+
                     if self._orthogonal_reg:
                         ortho_penalty = self.ortho_reguralization(self.OrthogonalTransformations[language])
                         loss += self._orthogonal_reg * ortho_penalty
@@ -195,7 +228,7 @@ class Network():
                         probe_l1_penalty = tf.norm(self.BinaryProbe[task], ord=1)
                         loss += l1_lambda * probe_l1_penalty
         
-                variables = [self.BinaryProbe[task], self.OrthogonalTransformations[language], self.Intercept[task]]
+                variables = [self.BinaryProbe[task], self.OrthogonalTransformations[language]] #, self.Intercept[language]]
         
                 if self.average_layers:
                     variables.append(self.LayerWeights[f'lw_{task}'])
@@ -226,16 +259,16 @@ class Network():
 
         @tf.function(experimental_relax_shapes=True)
         def evaluate_on_batch(self, feature_vector, embeddings, language, task):
-            target, mask = self._compute_target_mask(feature_vector)
+            target_pos, target_neg, target_abs, mask = self._compute_target_mask(feature_vector)
             
-            predicted_depths = self._forward(embeddings, language, task)
-            loss = self._logistic_loss(predicted_depths, target, mask)
+            predicted_pos, predicted_neg, predicted_abs = self._forward(embeddings, language, task)
+            loss = self._double_loss(predicted_pos, predicted_neg, predicted_abs, target_pos, target_neg, target_abs, mask)
             return loss
 
         @tf.function(experimental_relax_shapes=True)
         def predict_on_batch(self, embeddings, language, task):
-            predicted_depths = self._forward(embeddings, language, task)
-            return predicted_depths
+            predicted_pos, predicted_neg, predicted_abs = self._forward(embeddings, language, task)
+            return predicted_pos, predicted_neg, predicted_abs
 
     def __init__(self, args):
 
@@ -261,14 +294,19 @@ class Network():
                               'f_bias': tf.io.FixedLenFeature([], tf.int64),
                               'm_information': tf.io.FixedLenFeature([], tf.int64),
                               'f_information': tf.io.FixedLenFeature([], tf.int64),
+                              'emp_bias': tf.io.FixedLenFeature([], tf.float32),
                               'is_object': tf.io.FixedLenFeature([], tf.int64)
                               }
+        
         if layer_idx == -1:
-            features_to_decode.update({f'layer_{idx}': tf.io.FixedLenFeature([], tf.string)
-                                       for idx in range(constants.MODEL_LAYERS[model])})
+            features_to_decode.update({f'layer_{idx}_profession': tf.io.FixedLenFeature([], tf.string)
+                                        for idx in range(constants.MODEL_LAYERS[model])})
+            features_to_decode.update({f'layer_{idx}_pronoun': tf.io.FixedLenFeature([], tf.string)
+                                        for idx in range(constants.MODEL_LAYERS[model])})
         else:
-            features_to_decode[f'layer_{layer_idx}'] = tf.io.FixedLenFeature([], tf.string)
-    
+            features_to_decode[f'layer_{layer_idx}_profession'] = tf.io.FixedLenFeature([], tf.string)
+            features_to_decode[f'layer_{layer_idx}_pronoun'] = tf.io.FixedLenFeature([], tf.string)
+        
         x = tf.io.parse_example(
             serialized_example,
             features=features_to_decode)
@@ -278,16 +316,23 @@ class Network():
         f_bias = tf.cast(x["f_bias"], dtype=tf.bool)
         m_information = tf.cast(x["m_information"], dtype=tf.bool)
         f_information = tf.cast(x["f_information"], dtype=tf.bool)
+        emp_bias = tf.cast(x["emp_bias"], dtype=tf.float32)
         is_object = tf.cast(x["is_object"], dtype=tf.bool)
         if layer_idx == -1:
-            embeddings = [tf.io.parse_tensor(x[f"layer_{idx}"], out_type=tf.float32)
-                          for idx in range(constants.MODEL_LAYERS[model])]
-            embeddings = tf.stack(embeddings, axis=0)
+            embeddings_profession = [tf.io.parse_tensor(x[f"layer_{idx}_profession"], out_type=tf.float32)
+                                    for idx in range(constants.MODEL_LAYERS[model])]
+            embeddings_profession = tf.stack(embeddings_profession, axis=0)
+
+            embeddings_pronoun = [tf.io.parse_tensor(x[f"layer_{idx}_pronoun"], out_type=tf.float32)
+                                     for idx in range(constants.MODEL_LAYERS[model])]
+            embeddings_pronoun = tf.stack(embeddings_pronoun, axis=0)
     
         else:
-            embeddings = tf.io.parse_tensor(x[f"layer_{layer_idx}"], out_type=tf.float32)
+            embeddings_profession = tf.io.parse_tensor(x[f"layer_{layer_idx}_profession"], out_type=tf.float32)
+
+            embeddings_pronoun = tf.io.parse_tensor(x[f"layer_{layer_idx}_pronoun"], out_type=tf.float32)
     
-        return index, m_bias, f_bias, m_information, f_information, is_object, embeddings
+        return index, m_bias, f_bias, m_information, f_information, emp_bias, is_object, embeddings_profession, embeddings_pronoun
 
     @staticmethod
     def data_pipeline(tf_data, languages, tasks, args, mode='train'):
@@ -299,8 +344,8 @@ class Network():
                 data = data.map(partial(Network.decode, layer_idx=args.layer_index, model=args.model),
                                 num_parallel_calls=tf.data.experimental.AUTOTUNE)
                 if args.objects_only:
-                    data = data.filter(lambda index, m_bias, f_bias, m_information, f_information, is_object,
-                                              embeddings: is_object)
+                    data = data.filter(lambda index, m_bias, f_bias, m_information, f_information, emp_bias, is_object,
+                                              embeddings_profession, embeddings_pronoun: is_object)
                 if args.layer_index >= 0:
                     data = data.cache()
                 if mode == 'train':
@@ -321,7 +366,8 @@ class Network():
     def train(self, tf_reader, args):
         curr_patience = 0
         train = self.data_pipeline(tf_reader.train, self.languages, self.tasks, args, mode='train')
-        dev = {lang: {task: self.data_pipeline(tf_reader.dev, [lang], [task], args, mode='dev')
+        # Validate on test set
+        dev = {lang: {task: self.data_pipeline(tf_reader.test, [lang], [task], args, mode='dev')
                       for task in self.tasks}
                for lang in self.languages}
     
@@ -335,16 +381,15 @@ class Network():
                 lang = lang.numpy().decode()
                 task = task.numpy().decode()
             
-                _, batch_m_bias, batch_f_bias, batch_m_information, batch_f_information, batch_is_object, batch_embeddings = batch
+                _, batch_m_bias, batch_f_bias, batch_m_information, batch_f_information, batch_emp_bias, batch_is_object,\
+                batch_embeddings_prof, batch_embeddings_pron = batch
                 
-                if task == 'm_bias':
-                    feature_vector = batch_m_bias
-                elif task == 'f_bias':
-                    feature_vector = batch_f_bias
-                elif task == 'm_information':
-                    feature_vector = batch_m_information
-                elif task == 'f_information':
-                    feature_vector = batch_f_information
+                if task == 'bias':
+                    feature_vector = batch_emp_bias # tf.cast(batch_m_bias, tf.int64) - tf.cast(batch_f_bias, tf.int64)
+                    batch_embeddings = batch_embeddings_pron
+                elif task == 'information':
+                    feature_vector = tf.cast(batch_m_information, tf.int64) - tf.cast(batch_f_information, tf.int64)
+                    batch_embeddings = batch_embeddings_prof
                 else:
                     raise ValueError(f"Unrecognized task: {task}")
                 
@@ -379,6 +424,10 @@ class Network():
         
             with self.probe._writer.as_default():
                 tf.summary.scalar("train/learning_rate", self.probe._optimizer.learning_rate)
+        if self.probe.average_layers:
+            for task in self.tasks:
+                print(f"Layer weights for task {task} : ")
+                print(self.probe.LayerWeights[f'lw_{task}'].numpy())
 
     def evaluate(self, data, data_name, args):
         all_losses = np.zeros((len(self.languages), len(self.tasks)))
@@ -387,19 +436,18 @@ class Network():
             
                 progressbar = tqdm(enumerate(data[language][task]))
                 for batch_idx, (_, _, batch) in progressbar:
-                    _, batch_m_bias, batch_f_bias, batch_m_information, batch_f_information, batch_is_object, batch_embeddings = batch
+                    _, batch_m_bias, batch_f_bias, batch_m_information, batch_f_information, batch_emp_bias, batch_is_object, \
+                    batch_embeddings_prof, batch_embeddings_pron = batch
 
-                    if task == 'm_bias':
-                        feature_vector = batch_m_bias
-                    elif task == 'f_bias':
-                        feature_vector = batch_f_bias
-                    elif task == 'm_information':
-                        feature_vector = batch_m_information
-                    elif task == 'f_information':
-                        feature_vector = batch_f_information
+                    if task == 'bias':
+                        feature_vector = batch_emp_bias # tf.cast(batch_m_bias, tf.int64) - tf.cast(batch_f_bias, tf.int64)
+                        batch_embeddings = batch_embeddings_pron
+                    elif task == 'information':
+                        feature_vector = tf.cast(batch_m_information, tf.int64) - tf.cast(batch_f_information, tf.int64)
+                        batch_embeddings = batch_embeddings_prof
                     else:
                         raise ValueError(f"Unrecognized task: {task}")
-                    
+                        
                     batch_loss = self.probe.evaluate_on_batch(feature_vector, batch_embeddings,language, task)
 
                     progressbar.set_description(f"Evaluating on {language} {task} loss: {batch_loss:.4f}")

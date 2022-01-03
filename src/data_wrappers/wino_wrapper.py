@@ -141,8 +141,8 @@ class WinoWrapper():
 				print(f"Sentence {idx} problematic word: {self.ortho_forms[idx]}, in file {self.wino_name}, skipping.")
 				removed_indices.append(idx)
 				
-			elif self.pronoun_counters[idx] != 1:
-				print(f"Sentence {idx} : {' '.join(self.tokens[idx])} number of pronouns does not equal to 1.")
+			elif self.pronoun_counters[idx] != len(self.pronoun_ortho_forms[idx]):
+				print(f"Sentence {idx} : {' '.join(self.tokens[idx])} mismatch in pronoun and expected gender.")
 				removed_indices.append(idx)
 			else:
 				wordpiece_pointer = 1
