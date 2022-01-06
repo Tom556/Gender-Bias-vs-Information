@@ -37,7 +37,8 @@ class Network():
                                                    trainable=True, name='{}_map'.format(lang))
                                  for lang in self.languages}
             
-            self.Intercept = {lang: tf.Variable(tf.initializers.Zeros()((1, self.probe_rank))) for lang in self.languages}
+            self.Intercept = {f'intercept_{task}': tf.Variable(tf.initializers.Zeros()((1, self.probe_rank)),
+                                                        trainable=True, name=f'{task}_intercept', dtype=tf.float32) for task in self.tasks}
 
             if self._orthogonal_reg:
                 # if orthogonalization is used multilingual probe is only diagonal scaling
@@ -91,7 +92,7 @@ class Network():
             """ Computes projections after Orthogonal Transformation, and after Dimension Scaling"""
 
             orthogonal_projections = embeddings @ self.OrthogonalTransformations[language]
-            # orthogonal_projections -= self.Intercept[language]
+            orthogonal_projections -= self.Intercept[f'intercept_{task}']
             if self._orthogonal_reg:
                 projections = orthogonal_projections * self.BinaryProbe[task]
             else:
@@ -121,8 +122,8 @@ class Network():
             if aggregation == 'sum':
                 raise NotImplemented
                 
-                aggregated = tf.reduce_sum(projections, axis=1, keepdims=True)
-                aggregated = tf.math.sigmoid(aggregated + self.Intercept[task])
+                # aggregated = tf.reduce_sum(projections, axis=1, keepdims=True)
+                # aggregated = tf.math.sigmoid(aggregated + self.Intercept[task])
             elif aggregation == 'max':
                 aggregated = tf.reduce_sum(projections, axis=1, keepdims=True)
             elif aggregation == 'norm':
@@ -228,7 +229,7 @@ class Network():
                         probe_l1_penalty = tf.norm(self.BinaryProbe[task], ord=1)
                         loss += l1_lambda * probe_l1_penalty
         
-                variables = [self.BinaryProbe[task], self.OrthogonalTransformations[language]] #, self.Intercept[language]]
+                variables = [self.BinaryProbe[task], self.OrthogonalTransformations[language], self.Intercept[f'intercept_{task}']]
         
                 if self.average_layers:
                     variables.append(self.LayerWeights[f'lw_{task}'])
@@ -249,7 +250,7 @@ class Network():
                     if self._orthogonal_reg:
                         tf.summary.scalar("train/{}_nonorthogonality_penalty".format(language), ortho_penalty)
                         tf.summary.scalar("train/{}_nonzero_dimensions".format(task),
-                                          tf.math.reduce_sum(tf.cast(self.BinaryProbe[task] > 1e-4, dtype=tf.int64)))
+                                          tf.math.reduce_sum(tf.cast(tf.abs(self.BinaryProbe[task]) > 1e-4, dtype=tf.int64)))
                     if self._l1_reg:
                         tf.summary.scalar("train/probe_l1_penalty", probe_l1_penalty)
                         tf.summary.scalar("train/l1_lambda", l1_lambda)
@@ -283,7 +284,8 @@ class Network():
         self.ckpt = tf.train.Checkpoint(optimizer=self.probe._optimizer,
                                         **self.probe.OrthogonalTransformations,
                                         **self.probe.LayerWeights,
-                                        **self.probe.BinaryProbe)
+                                        **self.probe.BinaryProbe,
+                                        **self.probe.Intercept)
         self.checkpoint_manager = tf.train.CheckpointManager(self.ckpt, os.path.join(args.out_dir, 'params'),
                                                              max_to_keep=1)
 
