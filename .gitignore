@@ -1,0 +1,10 @@
+/data/bert-base-cased_gendervec_dev_spb.tfrecord
+/data/bert-base-cased_gendervec_test_spb.tfrecord
+/data/bert-base-cased_gendervec_train_spb.tfrecord
+/data/bert-large-cased_gendervec_dev_spb.tfrecord
+/data/bert-large-cased_gendervec_test_spb.tfrecord
+/data/bert-large-cased_gendervec_train_spb.tfrecord
+/data/data_map.json
+/data/eb_bert-base-cased.json
+/data/eb_bert-large-cased.json
+/data/empirical_bias_bert-large-cased_f23.csv
