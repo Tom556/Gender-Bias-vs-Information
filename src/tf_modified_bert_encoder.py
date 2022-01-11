@@ -45,12 +45,8 @@ class TFModifiedBertEncoder(TFBertEncoder):
         filter_vector = tf.cast((tf.abs(scaling_vector_out) <= self.filter_threshold), dtype=tf.float32)
         intercept = (intercept * scaling_vector_out * (1.0 - filter_vector))
         if scaling_vector_in is not None:
-            # filter_vector = 1.0 - ((1.0 - filter_vector) * tf.cast((scaling_vector_in * scaling_vector_out) > ( - self.filter_threshold ** 2.0), dtype=tf.float32))
             filter_vector = 1.0 - ((1.0 - filter_vector) * tf.cast(tf.abs(scaling_vector_out) > tf.abs(scaling_vector_in), dtype=tf.float32))
-        # tf.print(tf.squeeze(tf.where(filter_vector == 0.0)))
-        # tf.print(1024 - tf.reduce_sum(filter_vector))
-        # intercept = (intercept * scaling_vector_out * (1.0 - filter_vector))
-        
+            
         if self.with_intercept:
             projected_states = tf.matmul((tf.matmul(hidden_states, orthogonal_transformation) * filter_vector) - intercept, tf.transpose(orthogonal_transformation),)
         else:
@@ -78,7 +74,6 @@ class TFModifiedBertEncoder(TFBertEncoder):
                 hidden_states, attention_mask, head_mask[i], output_attentions, training=training
             )
             hidden_states = layer_outputs[0]
-            #TODO transform hidden state
             if i in self.layers_to_modify:
                 hidden_states = self.transform_hidden_states(hidden_states, i)
             
