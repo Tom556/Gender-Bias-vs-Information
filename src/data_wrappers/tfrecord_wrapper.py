@@ -10,6 +10,7 @@ import sys
 from transformers import BertTokenizer, BertConfig, TFBertModel
 from transformers import RobertaTokenizer, TFRobertaModel
 from transformers import XLMRobertaTokenizer, TFXLMRobertaModel
+from transformers import ElectraTokenizer, TFElectraModel
 
 central_storage_strategy = tf.distribute.experimental.CentralStorageStrategy()
 
@@ -99,7 +100,7 @@ class TFRecordWriter(TFRecordWrapper):
         
         for model_path in self.models:
             # This is crude, but should work
-            do_lower_case = "uncased" in model_path
+            do_lower_case = ("uncased" in model_path or "electra" in model_path)
             model, tokenizer = self.get_model_tokenizer(model_path, do_lower_case=do_lower_case)
             for tfrecord_file in self.model2tfrs[model_path]:
                 if os.path.isfile(os.path.join(data_dir, tfrecord_file)):
@@ -158,6 +159,9 @@ class TFRecordWriter(TFRecordWrapper):
             tokenizer = BertTokenizer.from_pretrained("bert-base-cased", do_lower_case=True)
             config = BertConfig(seed=seed, output_hidden_states=True, output_attentions=False)
             model = TFBertModel(config)
+        elif model_path.startswith('electra'):
+            tokenizer = ElectraTokenizer.from_pretrained('google/' + model_path, do_lower_case=do_lower_case)
+            model = TFElectraModel.from_pretrained('google/' + model_path, output_hidden_states=True, output_attentions=False)
         else:
             raise ValueError(f"Unknown Transformer name: {model_path}. "
                              f"Please select one of the supported models: {constants.SUPPORTED_MODELS}")
