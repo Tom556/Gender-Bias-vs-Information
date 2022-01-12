@@ -69,7 +69,6 @@ def get_name(args):
         
         if args.keep_information:
             name += "_keep-information"
-            
     return name
 
 
@@ -88,20 +87,58 @@ def write_to_csv(data, args):
             writer.writerow(row)
 
 
-def write_to_json(data, args):
+def write_to_json_txt(data, args):
+    
+    gendered_MSE = 0.
+    ungendered_MSE = 0.
+    gendered_ABS = 0.
+    ungendered_ABS = 0.
+    gendered_MEAN = 0.
+    ungendered_MEAN = 0.
+    
+    n_gendered = 0
+    n_ungendered = 0
     out_dict = {}
     for k, v in data.items():
         if k == 'TOTAL_PROB':
             continue
         TEs = [v[prompt_type] for prompt_type in ("IS", "WAS", "JOB", "WORKS", "LIKES1", "LIKES2", "HATES1", "HATES2")]
-        out_dict[k] = str(np.array(TEs).mean())
+        mean_TE = np.array(TEs).mean()
+        out_dict[k] = str(mean_TE)
+        
+        if k in constants.male_gendered or k in constants.female_gendered:
+            n_gendered += 1
+            
+            gendered_MSE += mean_TE ** 2.0
+            gendered_ABS += np.abs(mean_TE)
+            gendered_MEAN += mean_TE
+            
+        else:
+            n_ungendered += 1
+
+            ungendered_MSE += mean_TE ** 2.0
+            ungendered_ABS += np.abs(mean_TE)
+            ungendered_MEAN += mean_TE
+
+    gendered_STD = np.sqrt((gendered_MSE / n_gendered) - (gendered_MEAN / n_gendered) ** 2.0)
+    ungendered_STD = np.sqrt((ungendered_MSE / n_ungendered) - (ungendered_MEAN / n_ungendered)** 2.0)
+    
 
     file_name = get_name(args) + ".json"
     output_file = os.path.join(args.data_dir, file_name)
     with open(output_file, 'w') as out_json:
         json.dump(out_dict, out_json, indent=2, sort_keys=True)
 
-
+    file_name = get_name(args) + ".txt"
+    output_file = os.path.join(args.data_dir, file_name)
+    with open(output_file, 'w') as out_txt:
+        out_txt.write(f"MSE: gendered {gendered_MSE/n_gendered} ungendered {ungendered_MSE/n_ungendered}\n"
+                      f"ABS: gendered {gendered_ABS/n_gendered} ungendered {ungendered_ABS/n_ungendered}\n"
+                      f"MEAN: gendered {gendered_MEAN/n_gendered} ungendered {ungendered_MEAN/n_ungendered}\n"
+                      f"STD: gendered {gendered_STD} ungendered {ungendered_STD}\n"
+                      f"COUNT: gendered {n_gendered} ungendered {n_ungendered}\n")
+    
+    
 def generate_simple_prompts(args):
     for prompt_type, (position, prompt_line) in prompts.items():
         if os.path.isfile(os.path.join(args.data_dir, prompt_type + "_prompts.txt")):
@@ -143,7 +180,7 @@ if __name__ == "__main__":
     
     generate_simple_prompts(args)
 
-    mlm, tokenizer = get_mlm_tokenizer(args.model, args.filter_layers,
+    mlm, tokenizer = get_mlm_tokenizer(args.model, filter_layers=args.filter_layers,
                                        keep_information=args.keep_information, filter_threshold=args.filter_threshold)
 
 
@@ -180,7 +217,6 @@ if __name__ == "__main__":
         for prof in wrapper.ortho_forms:
             assert prof in data, f"{prof} not in data!"
     
-   
         for mode in ('train', 'dev', 'test'):
             indices, all_wordpieces, all_segments, all_token_len, all_prof_positions, all_pronoun_positions, \
             m_biases, f_biases, m_informations, f_informations, objects, all_masked_positions = wrapper.training_examples(mode)
@@ -210,6 +246,7 @@ if __name__ == "__main__":
                     # dirty hack
                     mlm.layers[0].encoder.with_intercept = False
                     output_base = mlm(base_wordpieces)
+
                     mlm.layers[0].encoder.with_intercept = True
                     output_biased = mlm(biased_wordpieces)
                 else:
@@ -248,5 +285,5 @@ if __name__ == "__main__":
 
             
     write_to_csv(data, args)
-    write_to_json(data, args)
+    write_to_json_txt(data, args)
             

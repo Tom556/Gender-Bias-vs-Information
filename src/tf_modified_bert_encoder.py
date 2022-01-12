@@ -11,46 +11,45 @@ class TFModifiedBertEncoder(TFBertEncoder):
             self.__dict__.update(source.__dict__)
         else:
             super().__init__(**kwargs)
-        self.scaling_vectors_out = []
-        self.orthogonal_transformations = []
+
+        self.filter_vectors = []
         self.intercepts = []
-        for scaling_vector, orthogonal_transformation, intercept in projection_matrices_out:
-            self.scaling_vectors_out.append(tf.squeeze(tf.constant(scaling_vector, dtype=tf.float32)))
-            self.orthogonal_transformations.append(tf.constant(orthogonal_transformation, dtype=tf.float32))
-            self.intercepts.append(tf.squeeze(tf.constant(intercept, dtype=tf.float32)))
-
-        self.scaling_vectors_in = []
-        if projection_matrices_in is not None:
-            for scaling_vector, orthogonal_transformation, intercept in projection_matrices_in:
-                self.scaling_vectors_in.append(tf.squeeze(tf.constant(scaling_vector, dtype=tf.float32)))
-        else:
-            self.scaling_vectors_in = None
-            
+        self.orthogonal_transformations = []
         self.layers_to_modify = layers_to_modify
-        
-        self.filter_threshold=filter_threshold
-
         self.with_intercept = False
+        
+        self.precompute_filters(projection_matrices_out, projection_matrices_in, filter_threshold)
+        
+    def precompute_filters(self, projection_matrices_out, projection_matrices_in, filter_threshold):
+        self.filter_vectors = []
+        self.intercepts = []
+        self.orthogonal_transformations = []
+        for layer_idx, (scaling_vector, orthogonal_transformation, intercept) in enumerate(projection_matrices_out):
+    
+            scaling_vector_out = tf.squeeze(tf.constant(scaling_vector, dtype=tf.float32))
+            orthogonal_transformation = tf.constant(orthogonal_transformation, dtype=tf.float32)
+            intercept = tf.squeeze(tf.constant(intercept, dtype=tf.float32))
+
+            filter_vector = tf.cast((tf.abs(scaling_vector_out) <= filter_threshold), dtype=tf.float32)
+            intercept = (intercept * tf.abs(scaling_vector_out) * (1.0 - filter_vector))
+            if projection_matrices_in is not None:
+                scaling_vector_in, _, _ = projection_matrices_in[layer_idx]
+                scaling_vector_in = tf.squeeze(tf.constant(scaling_vector_in, dtype=tf.float32))
+                filter_vector = 1.0 - ((1.0 - filter_vector) * tf.cast(tf.abs(scaling_vector_out) > tf.abs(scaling_vector_in), dtype=tf.float32))
+            
+            self.filter_vectors.append(filter_vector)
+            self.intercepts.append(intercept)
+            self.orthogonal_transformations.append(orthogonal_transformation)
 
     def transform_hidden_states(self, hidden_states, layer_number):
-        scaling_vector_out = self.scaling_vectors_out[layer_number]
+        filter_vector = self.filter_vectors[layer_number]
         orthogonal_transformation = self.orthogonal_transformations[layer_number]
         intercept = self.intercepts[layer_number]
         
-        if self.scaling_vectors_in:
-            scaling_vector_in = self.scaling_vectors_in[layer_number]
-        else:
-            scaling_vector_in = None
-
-        filter_vector = tf.cast((tf.abs(scaling_vector_out) <= self.filter_threshold), dtype=tf.float32)
-        intercept = (intercept * scaling_vector_out * (1.0 - filter_vector))
-        if scaling_vector_in is not None:
-            filter_vector = 1.0 - ((1.0 - filter_vector) * tf.cast(tf.abs(scaling_vector_out) > tf.abs(scaling_vector_in), dtype=tf.float32))
-            
         if self.with_intercept:
-            projected_states = tf.matmul((tf.matmul(hidden_states, orthogonal_transformation) * filter_vector) - intercept, tf.transpose(orthogonal_transformation),)
+            projected_states = tf.matmul((tf.matmul(hidden_states, orthogonal_transformation) * filter_vector) + intercept, tf.transpose(orthogonal_transformation))
         else:
-            projected_states = tf.matmul(tf.matmul(hidden_states, orthogonal_transformation) * filter_vector, tf.transpose(orthogonal_transformation),)
+            projected_states = tf.matmul(tf.matmul(hidden_states, orthogonal_transformation) * filter_vector, tf.transpose(orthogonal_transformation))
         return projected_states
 
     def call(
