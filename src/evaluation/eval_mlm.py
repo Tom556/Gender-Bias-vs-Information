@@ -64,5 +64,5 @@ if __name__ == "__main__":
     out_fn = os.path.join(args.data_dir, "mlm_accuracy_" + get_outfile_name(args) + ".txt")
     with open(out_fn, 'w') as out_file:
         # out_file.write(f"Model: {args.model}\nFiltered layers: {args.filter_layers}\nKeep information: {args.keep_information}\nFilter threshold: {args.filter_threshold}"))
-        out_file.write(f"MLM Accuracy: {all_correct/all_predicted}\nN predictions: {all_predicted}")
+        out_file.write(f"MLM Accuracy: {all_correct/all_predicted}\nN predictions: {all_predicted}\n")
 
