@@ -45,7 +45,7 @@ if __name__ == "__main__":
     parser.add_argument("--model", default='bert-large-cased', type=str, help="Name of model.")
     parser.add_argument("--filter-layers",nargs='*', default=[], type=int, help="Filter out bias in layers.")
     parser.add_argument("--keep-information", action="store_true", help="Whether to keep the information dimensions.")
-    parser.add_argument("--filter-threshold", default=1e-4, type=float, help="Threshold for bias filter.")
+    parser.add_argument("--filter-threshold", default=1e-12, type=float, help="Threshold for bias filter.")
 
     args = parser.parse_args()
     

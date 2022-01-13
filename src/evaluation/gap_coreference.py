@@ -105,33 +105,39 @@ def calculate_probability(probs, pronoun, tokenizer):
     
 def gap_test(model, tokenizer, sent):
     
-    tokens = [tokenizer.cls_token] + tokenizer.tokenize(sent) + [tokenizer.sep_token]
+    model_tokens = [tokenizer.cls_token] + tokenizer.tokenize(sent) + [tokenizer.sep_token]
     if len(tokens) > 256:
         print(f"Skipping sent: {sent}\nToo many tokens")
-        return 0, 0
+        return 0, 0, 0
     
-    mask_index = tokens.index(tokenizer.mask_token)
+    mask_index = model_tokens.index(tokenizer.mask_token)
     
-    token_ids = tf.expand_dims(tf.constant(tokenizer.convert_tokens_to_ids(tokens), dtype=tf.int64), 0)
+    print(model_tokens)
+    print(model_tokens[mask_index])
+    
+    token_ids = tf.expand_dims(tf.constant(tokenizer.convert_tokens_to_ids(model_tokens), dtype=tf.int64), 0)
     outputs = model(token_ids)
     probabilities = tf.nn.softmax(outputs.logits[0,mask_index,:])
     
-    return calculate_probability(probabilities, pronoun, tokenizer)
+    predicted_token_id = tf.argmax(outputs.logits[0,mask_index,:])
+    return calculate_probability(probabilities, pronoun, tokenizer) + (predicted_token_id,)
     
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     
     parser.add_argument("data_dir", help="Directory with data")
-    parser.add_argument("--evaluation-file", default='gap-validation', type=str, help="File with one sentence per line.")
+    parser.add_argument("--evaluation-file", default='gap-all', type=str, help="File with one sentence per line.")
     parser.add_argument("--model", default='bert-large-cased', type=str, help="Name of model.")
     parser.add_argument("--filter-layers",nargs='*', default=[], type=int, help="Filter out bias in layers.")
     parser.add_argument("--keep-information", action="store_true", help="Whether to keep the information dimensions.")
-    parser.add_argument("--filter-threshold", default=1e-8, type=float, help="Threshold for bias filter.")
+    parser.add_argument("--remove-information", action="store_true", help="Whether to remove the information dimensions.")
+    parser.add_argument("--filter-threshold", default=1e-12, type=float, help="Threshold for bias filter.")
     
     args = parser.parse_args()
 
     mlm, tokenizer = get_mlm_tokenizer(args.model, args.filter_layers,
+                                       remove_information=args.remove_information,
                                        keep_information=args.keep_information, filter_threshold=args.filter_threshold)
     
     in_fn = os.path.join(args.data_dir, args.evaluation_file + ".tsv")
@@ -140,6 +146,10 @@ if __name__ == "__main__":
     correct_female = 0
     all_male = 0
     all_female = 0
+    
+    t1_male = 0
+    t1_female = 0
+    
     for sent_idx, (tokens, pronoun, token_index, token_ending) in tqdm(enumerate(read_annotations(in_fn))):
         gender = pronoun2gender.get(pronoun.lower(), None)
         if not gender:
@@ -147,21 +157,33 @@ if __name__ == "__main__":
             continue
 
         tokens[token_index] = tokenizer.mask_token + token_ending
-        m_prob, f_prob = gap_test(mlm, tokenizer, " ".join(tokens))
+        print(" ".join(tokens))
+        m_prob, f_prob, predicted_token_id = gap_test(mlm, tokenizer, " ".join(tokens))
         if not m_prob or not f_prob:
             continue
-        
+
+        if tokenizer.do_lower_case:
+            pronoun_token_id = tokenizer.convert_tokens_to_ids([pronoun.lower()])[0]
+        else:
+            pronoun_token_id = tokenizer.convert_tokens_to_ids([pronoun])[0]
+            
         if gender == 'male':
             all_male += 1
             if m_prob > f_prob:
                 correct_male += 1
+            if pronoun_token_id == predicted_token_id:
+                t1_male += 1
         elif gender == 'female':
             all_female += 1
             if m_prob < f_prob:
                 correct_female += 1
+            if pronoun_token_id == predicted_token_id:
+                t1_female += 1
                 
     out_fn = os.path.join(args.data_dir, "gap_accuracy_" + get_outfile_name(args) + ".txt")
     with open(out_fn, 'w') as out_file:
-        out_file.write(f"Accuracy: {(correct_male+correct_female)/(all_male+all_female)}\n"
+        out_file.write(f"Gender Accuracy: {(correct_male+correct_female)/(all_male+all_female)}\n"
                        f"Male: {correct_male/all_male}\nFemale: {correct_female/all_female}\n"
+                       f"Top 1 Accuracy: {(t1_male+t1_female)/(all_male+all_female)}\n"
+                       f"Male: {t1_male/all_male}\nFemale: {t1_female/all_female}\n"
                        f"Number of examples male: {all_male} female: {all_female}\n")

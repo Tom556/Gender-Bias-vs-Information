@@ -7,20 +7,31 @@ from transformers import AlbertTokenizer, TFAlbertForMaskedLM
 from transformers import ElectraTokenizer, TFElectraForMaskedLM
 
 from tf_modified_bert_encoder import TFModifiedBertEncoder
+from tf_modified_electra_encoder import TFModifiedElectraEncoder
 import constants
 
 
-def get_mlm_tokenizer(model_path, filter_layers=None, keep_information=False, filter_threshold=1e-4):
+def get_osp_matrices(model_path, keep_information, remove_information=False):
+    if remove_information:
+        OSPs_out = np.load(f'../experiments/{model_path}-intercept/osp_information_{model_path}.npz', allow_pickle=True)
+        OSPs_in = None
+    else:
+        OSPs_out = np.load(f'../experiments/{model_path}-intercept/osp_bias_{model_path}.npz', allow_pickle=True)
+        if keep_information:
+            OSPs_in = np.load(f'../experiments/{model_path}-intercept/osp_information_{model_path}.npz', allow_pickle=True)
+        else:
+            OSPs_in = None
+            
+    return OSPs_out, OSPs_in
+    
+
+def get_mlm_tokenizer(model_path, filter_layers=None, keep_information=False, remove_information=False, filter_threshold=1e-4):
     do_lower_case = ('uncased' in model_path)
     if model_path.startswith('bert'):
         tokenizer = BertTokenizer.from_pretrained(model_path, do_lower_case=do_lower_case)
         model = TFBertForMaskedLM.from_pretrained(model_path, output_hidden_states=False, output_attentions=False)
         if filter_layers:
-            OSPs_out = np.load(f'../experiments/{model_path}-intercept/osp_bias_{model_path}.npz', allow_pickle=True)
-            if keep_information:
-                OSPs_in = np.load(f'../experiments/{model_path}-intercept/osp_information_{model_path}.npz', allow_pickle=True)
-            else:
-                OSPs_in = None
+            OSPs_out, OSPs_in = get_osp_matrices(model_path, keep_information, remove_information)
             encoder = model.layers[0].encoder
             modified_encoder = TFModifiedBertEncoder(OSPs_out, filter_layers,
                                                      projection_matrices_in=OSPs_in, filter_threshold=filter_threshold, source=encoder)
@@ -37,6 +48,12 @@ def get_mlm_tokenizer(model_path, filter_layers=None, keep_information=False, fi
     elif model_path.startswith('electra'):
         tokenizer = ElectraTokenizer.from_pretrained("google/" + model_path, do_lower_case=True, remove_spaces=True)
         model = TFElectraForMaskedLM.from_pretrained("google/" + model_path, output_hidden_states=False, output_attentions=False)
+        if filter_layers:
+            OSPs_out, OSPs_in  = get_osp_matrices(model_path, keep_information, remove_information)
+            encoder = model.layers[0].encoder
+            modified_encoder = TFModifiedElectraEncoder(OSPs_out, filter_layers,
+                                                     projection_matrices_in=OSPs_in, filter_threshold=filter_threshold, source=encoder)
+            model.layers[0].encoder = modified_encoder
     else:
         raise ValueError(f"Unknown Transformer name: {model_path}. "
                          f"Please select one of the supported models: {constants.SUPPORTED_MODELS}")
@@ -55,5 +72,7 @@ def get_outfile_name(args):
         
         if args.keep_information:
             name += "_keep-information"
+        if args.remove_information:
+            name += "_remove-information"
     
     return name

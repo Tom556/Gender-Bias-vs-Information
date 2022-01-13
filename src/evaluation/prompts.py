@@ -274,8 +274,7 @@ if __name__ == "__main__":
                     data[prof][prompt_type + "2"] = TE_2
                 else:
                     data[prof][prompt_type] = TE
-
-
+    
             if prompt_type in ("HATES", "LIKES"):
                 data["TOTAL_PROB"][prompt_type + "1"] = sum_base
                 data["TOTAL_PROB"][prompt_type + "2"] = sum_base_2
