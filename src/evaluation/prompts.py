@@ -69,6 +69,8 @@ def get_name(args):
         
         if args.keep_information:
             name += "_keep-information"
+        if args.no_intercept:
+            name += "_no-intercept"
     return name
 
 
@@ -174,8 +176,9 @@ if __name__ == "__main__":
     parser.add_argument("--model", default='roberta-large', type=str, help="Name of model.")
     parser.add_argument("--filter-layers",nargs='*', default=[], type=int, help="Filter out bias in layers.")
     parser.add_argument("--keep-information", action="store_true", help="Whether to keep the information dimensions.")
-    parser.add_argument("--filter-threshold", default=1e-8, type=float, help="Threshold for bias filter.")
-
+    parser.add_argument("--remove-information", action="store_true", help="Whether to remove the information dimensions.")
+    parser.add_argument("--filter-threshold", default=1e-12, type=float, help="Threshold for bias filter.")
+    parser.add_argument("--no-intercept", action="store_true", help="Whether to don't use intercept in filtering")
     args = parser.parse_args()
     
     generate_simple_prompts(args)
@@ -247,7 +250,7 @@ if __name__ == "__main__":
                     mlm.layers[0].encoder.with_intercept = False
                     output_base = mlm(base_wordpieces)
 
-                    mlm.layers[0].encoder.with_intercept = True
+                    mlm.layers[0].encoder.with_intercept = (True and not args.no_intercept)
                     output_biased = mlm(biased_wordpieces)
                 else:
                     output_base = mlm(base_wordpieces)

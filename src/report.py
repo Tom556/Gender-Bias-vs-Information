@@ -4,7 +4,7 @@ import json
 
 from data_wrappers.tfrecord_wrapper import TFRecordReader
 from network import Network
-from reporting.reporter import AccuracyReporter
+from reporting.reporter import AccuracyReporter, CorrelationReporter
 
 import constants
 
@@ -38,7 +38,8 @@ if __name__ == "__main__":
     parser.add_argument("--ortho", default=0.2, type=float,
                         help="Orthogonality reguralization (SRIP) for language map matrices.")
     parser.add_argument("--l1", default=None, type=float, help="L1 reguralization of the weights.")
-    parser.add_argument("--clip-norm", default=None, type=float, help="Clip gradient norm to this value")
+    parser.add_argument("--clip-norm", default=1.5, type=float, help="Clip gradient norm to this value")
+    # parser.add_argument("--gate-threshold", default=None, type=float, help="Gate masking large values in the probe")
 
     parser.add_argument("--subsample-train", default=None, type=int,
                         help="Size of subsample taken from a training set.")
@@ -55,10 +56,29 @@ if __name__ == "__main__":
 
     do_lower_case = (constants.CASING_UNCASED in args.model)
 
-    if args.seed == 42:
-        experiment_name = f"task_{'_'.join(args.tasks)}-layer_{args.layer_index}-trainl_{'_'.join(args.languages)}"
-    else:
-        experiment_name = f"task_{'_'.join(args.tasks)}-layer_{args.layer_index}-trainl_{'_'.join(args.languages)}-seed_{args.seed}"
+    experiment_name = f"task_{'_'.join(args.tasks)}-layer_{args.layer_index}-trainl_{'_'.join(args.languages)}"
+
+    if args.learning_rate != 0.02:
+        experiment_name += f"-lr_{args.learning_rate}"
+    if args.batch_size != 10:
+        experiment_name += f"-bs_{args.batch_size}"
+    if args.clip_norm != 1.5:
+        experiment_name += f"-cn_{args.clip_norm}"
+    if args.seed != 42:
+        experiment_name += f"-seed_{args.seed}"
+    if args.repeat != 1:
+        experiment_name += f"-rep_{args.repeat}"
+    if args.ortho != 0.05:
+        experiment_name += f"-or_{args.ortho}"
+    if args.l1 is not None and args.l1 != 0:
+        experiment_name += f"-l1_{args.l1}"
+    # experiment_name += '-abs_loss'
+    # experiment_name += '-no-square-in-loss'
+    # if args.gate_threshold:
+    #     experiment_name += f"-gt_{args.gate_threshold}"
+    if args.objects_only:
+        experiment_name += '-objects_only'
+        
     args.out_dir = os.path.join(args.parent_dir, experiment_name)
     if not os.path.exists(args.out_dir):
         os.mkdir(args.out_dir)
@@ -71,5 +91,9 @@ if __name__ == "__main__":
     
     for mode in ("test", "dev", "train"):
         reporter = AccuracyReporter(args, network, args.tasks, getattr(tf_reader, mode), mode)
+        reporter.compute(args)
+        reporter.write(args)
+
+        reporter = CorrelationReporter(args, network, args.tasks, getattr(tf_reader, mode), mode)
         reporter.compute(args)
         reporter.write(args)
